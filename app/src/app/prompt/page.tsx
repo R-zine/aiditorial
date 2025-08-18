@@ -1,4 +1,8 @@
+"use client";
+
 import { BorderBeam } from "@/components/magicui/border-beam";
+import { InteractiveHoverButton } from "@/components/magicui/interactive-hover-button";
+import { RainbowButton } from "@/components/magicui/rainbow-button";
 import {
   Card,
   CardAction,
@@ -15,10 +19,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AIConversation,
+  AIConversationContent,
+  AIConversationScrollButton,
+} from "@/components/ui/shadcn-io/ai/conversation";
+import {
+  AIInput,
+  AIInputSubmit,
+  AIInputTextarea,
+  AIInputToolbar,
+} from "@/components/ui/shadcn-io/ai/input";
+import {
+  AIMessage,
+  AIMessageContent,
+} from "@/components/ui/shadcn-io/ai/message";
+import { useState } from "react";
 
 export default function Prompt() {
+  const [mode, setMode] = useState("Standard");
+
+  const messages: string[] = ["test", "test2"];
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col gap-15">
       <div className="flex md:flex-row flex-col !gap-10 !mt-30 !ml-10 !mr-10">
         <Card className=" w-full bg-foreground text-background !p-5 relative ">
           <CardHeader>
@@ -71,6 +95,37 @@ export default function Prompt() {
 
           <BorderBeam duration={8} delay={4} size={100} />
         </Card>
+      </div>
+      {mode === "Standard" && (
+        <div className="flex justify-center w-full">
+          <div className="min-w-[90vw] flex flex-col gap-10">
+            <div className="relative flex size-full flex-col divide-y overflow-hidden">
+              <AIConversation className="relative size-full rounded-lg border bg-foreground text-background">
+                <AIConversationContent>
+                  {messages.map((message) => (
+                    <AIMessage from="user">
+                      <AIMessageContent>{message}</AIMessageContent>
+                    </AIMessage>
+                  ))}
+                </AIConversationContent>
+                <AIConversationScrollButton />
+              </AIConversation>
+            </div>
+            <AIInput className="bg-accent-foreground text-background min-h-60 ">
+              <AIInputTextarea
+                placeholder="Prompt goes here"
+                className="!pl-4 !pt-4 min-h-60"
+              />
+            </AIInput>
+          </div>
+        </div>
+      )}
+      <div className="flex gap-10 justify-center">
+        <InteractiveHoverButton className="!p-1 w-30 !pl-6">
+          Prompt
+        </InteractiveHoverButton>
+
+        <RainbowButton className="!p-4 w-40 ">Save to history</RainbowButton>
       </div>
     </div>
   );
