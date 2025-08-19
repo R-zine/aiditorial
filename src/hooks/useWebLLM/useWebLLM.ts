@@ -31,12 +31,24 @@ export const useWebLLM = () => {
         initProgressCallback,
       });
 
+      dispatch({
+        type: "updateLoading",
+        payload: {
+          isLoading: false,
+          loadingData: null,
+        },
+      });
+
       return engine;
     })();
   }, [state.model]);
 
   useEffect(() => {
-    if (engineInstance) {
+    if (
+      engineInstance &&
+      state.messages.length &&
+      state.messages.at(-1)?.role === "user"
+    ) {
       (async () => {
         const engine = await engineInstance;
         if (!engine) return;

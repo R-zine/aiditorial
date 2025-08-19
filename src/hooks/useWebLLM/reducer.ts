@@ -27,7 +27,13 @@ export interface IAction {
 
 export function reducer(state: IState, action: IAction): IState {
   const { type, payload } = action;
-  if (type === "changeModel") return { ...state, model: payload };
+  if (type === "changeModel")
+    return {
+      ...state,
+      model: payload,
+      isLoading: true,
+      loadingData: { percent: 0, message: "Preparing to fetch your model" },
+    };
   if (type === "changeMode") return { ...state, mode: payload };
   if (type === "updateLoading")
     return {

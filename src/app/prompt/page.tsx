@@ -37,12 +37,13 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@radix-ui/react-dialog";
+import { useRef } from "react";
 
 export default function Prompt() {
   const { model, isLoading, loadingData, mode, messages, dispatch } =
     useWebLLM();
 
-  console.log(loadingData);
+  const inputRef = useRef(null);
 
   return (
     <div className="min-h-screen flex flex-col gap-15">
@@ -125,6 +126,7 @@ export default function Prompt() {
             </div>
             <AIInput className="bg-accent-foreground text-background min-h-60 ">
               <AIInputTextarea
+                ref={inputRef}
                 placeholder="Prompt goes here"
                 className="!pl-4 !pt-4 min-h-60"
               />
@@ -134,7 +136,19 @@ export default function Prompt() {
       )}
       <div className="flex gap-10 justify-center ">
         <RainbowButton className="!p-4 w-40 ">Save to history</RainbowButton>
-        <InteractiveHoverButton className="!p-1 w-30 !pl-6">
+        <InteractiveHoverButton
+          className="!p-1 w-30 !pl-6"
+          onClick={() => {
+            if (inputRef.current)
+              dispatch({
+                type: "addMessage",
+                payload: {
+                  role: "user",
+                  content: (inputRef.current as any).value,
+                },
+              });
+          }}
+        >
           Prompt
         </InteractiveHoverButton>
         <ShimmerButton className="!py-1 w-30 text-(--destructive)">
@@ -143,7 +157,7 @@ export default function Prompt() {
       </div>
 
       {isLoading && (
-        <div className="w-[100vw] h-[100vh] fixed bg-black z-100 !bg-opacity-50">
+        <div className="w-[100vw] h-[100vh] fixed bg-black z-100">
           <div className="w-[80vw] h-[80vh] top-[10vh] left-[10vw] fixed p-6 flex justify-center z-110  ">
             <Dialog modal open={isLoading}>
               <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
@@ -158,7 +172,6 @@ export default function Prompt() {
                   value={Number(loadingData?.percent) * 100}
                   gaugePrimaryColor="rgb(80.2% 0.134 225)"
                   gaugeSecondaryColor="rgb(60.4% 0.26 302)"
-                  className="text-opacity-0"
                 />
                 <div className="text-muted-foreground">
                   {loadingData?.message}
