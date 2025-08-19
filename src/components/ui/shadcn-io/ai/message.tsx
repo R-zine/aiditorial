@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "../../../ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../../avatar";
 import type { ComponentProps, HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
