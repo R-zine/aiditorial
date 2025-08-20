@@ -49,13 +49,14 @@ export const useWebLLM = () => {
       state.messages.length &&
       state.messages.at(-1)?.role === "user"
     ) {
+      dispatch({ type: "toogle-isReplying", payload: null });
       (async () => {
         const engine = await engineInstance;
         if (!engine) return;
         const reply = await engine.chat.completions.create({
           messages: state.messages,
         });
-
+        dispatch({ type: "toogle-isReplying", payload: null });
         dispatch({ type: "addMessage", payload: reply.choices[0].message });
       })();
     }

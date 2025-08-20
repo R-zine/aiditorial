@@ -40,8 +40,15 @@ import {
 import { useRef } from "react";
 
 export default function Prompt() {
-  const { model, isLoading, loadingData, mode, messages, dispatch } =
-    useWebLLM();
+  const {
+    model,
+    isLoading,
+    loadingData,
+    mode,
+    messages,
+    isReplying,
+    dispatch,
+  } = useWebLLM();
 
   const inputRef = useRef(null);
 
@@ -120,26 +127,58 @@ export default function Prompt() {
                       </AIMessageContent>
                     </AIMessage>
                   ))}
+                  {isReplying && (
+                    <AIMessage from="assistant">
+                      <AIMessageContent className="!mb-5 !px-3 !py-1">
+                        Calculating a reply...
+                      </AIMessageContent>
+                    </AIMessage>
+                  )}
                 </AIConversationContent>
                 <AIConversationScrollButton />
               </AIConversation>
             </div>
             <AIInput className="bg-accent-foreground text-background min-h-60 ">
               <AIInputTextarea
+                disabled={isReplying}
                 ref={inputRef}
                 placeholder="Prompt goes here"
                 className="!pl-4 !pt-4 min-h-60"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (inputRef.current) {
+                      dispatch({
+                        type: "addMessage",
+                        payload: {
+                          role: "user",
+                          content: (inputRef.current as any).value,
+                        },
+                      });
+                      (inputRef.current as any).value = "";
+                    }
+                  }
+                }}
               />
             </AIInput>
           </div>
         </div>
       )}
       <div className="flex gap-10 justify-center ">
-        <RainbowButton className="!p-4 w-40 ">Save to history</RainbowButton>
+        <RainbowButton
+          className={`!p-4 w-40 ${
+            isReplying ? "pointer-events-none grayscale" : ""
+          }`}
+          disabled={isReplying}
+        >
+          Save to history
+        </RainbowButton>
         <InteractiveHoverButton
-          className="!p-1 w-30 !pl-6"
+          disabled={isReplying}
+          className={`!p-1 w-30 !pl-6 ${
+            isReplying ? "pointer-events-none grayscale" : ""
+          }`}
           onClick={() => {
-            if (inputRef.current)
+            if (inputRef.current) {
               dispatch({
                 type: "addMessage",
                 payload: {
@@ -147,11 +186,18 @@ export default function Prompt() {
                   content: (inputRef.current as any).value,
                 },
               });
+              (inputRef.current as any).value = "";
+            }
           }}
         >
           Prompt
         </InteractiveHoverButton>
-        <ShimmerButton className="!py-1 w-30 text-(--destructive)">
+        <ShimmerButton
+          disabled={isReplying}
+          className={`!py-1 w-30 text-(--destructive) ${
+            isReplying ? "pointer-events-none grayscale" : ""
+          }`}
+        >
           Clear
         </ShimmerButton>
       </div>

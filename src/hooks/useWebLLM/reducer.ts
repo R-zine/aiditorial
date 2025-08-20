@@ -10,6 +10,7 @@ export interface IState {
     content: "string";
     role: "user" | "assistant";
   }[];
+  isReplying: boolean;
 }
 
 export const initialState: IState = {
@@ -18,10 +19,17 @@ export const initialState: IState = {
   isLoading: false,
   loadingData: null,
   messages: [],
+  isReplying: false,
 };
 
 export interface IAction {
-  type: "changeModel" | "changeMode" | "updateLoading" | "addMessage" | "clear";
+  type:
+    | "changeModel"
+    | "changeMode"
+    | "updateLoading"
+    | "addMessage"
+    | "toogle-isReplying"
+    | "clear";
   payload: any;
 }
 
@@ -43,5 +51,7 @@ export function reducer(state: IState, action: IAction): IState {
     };
   if (type === "addMessage")
     return { ...state, messages: [...state.messages, payload] };
+  if (type === "toogle-isReplying")
+    return { ...state, isReplying: !state.isReplying };
   return { ...state, messages: [] };
 }
