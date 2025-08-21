@@ -29,6 +29,10 @@ export const useWebLLM = () => {
       // Using CreateMLCEngine
       const engine = await CreateMLCEngine(state.model, {
         initProgressCallback,
+        appConfig: {
+          ...prebuiltAppConfig,
+          useIndexedDBCache: state.isCache,
+        },
       });
 
       dispatch({
@@ -49,14 +53,15 @@ export const useWebLLM = () => {
       state.messages.length &&
       state.messages.at(-1)?.role === "user"
     ) {
-      dispatch({ type: "toogle-isReplying", payload: null });
+      dispatch({ type: "toggleIsReplying", payload: null });
       (async () => {
         const engine = await engineInstance;
         if (!engine) return;
         const reply = await engine.chat.completions.create({
           messages: state.messages,
+          temperature: state.temperature,
         });
-        dispatch({ type: "toogle-isReplying", payload: null });
+        dispatch({ type: "toggleIsReplying", payload: null });
         dispatch({ type: "addMessage", payload: reply.choices[0].message });
       })();
     }

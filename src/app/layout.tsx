@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <header className="fixed z-1000 flex top-1.5 w-full align-center justify-center">
+        <header className="fixed z-11000 flex top-1.5 w-full align-center justify-center">
           <Navbar />
         </header>
         <main className={styles.main}>{children}</main>

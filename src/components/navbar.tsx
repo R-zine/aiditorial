@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export function Navbar() {
   return (
-    <Dock direction="middle" className="">
+    <Dock direction="middle" className="z-11000">
       <DockIcon className="">
         <Link href="/">
           <svg

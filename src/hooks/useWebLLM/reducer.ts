@@ -11,6 +11,8 @@ export interface IState {
     role: "user" | "assistant";
   }[];
   isReplying: boolean;
+  temperature: number;
+  isCache: boolean;
 }
 
 export const initialState: IState = {
@@ -20,6 +22,8 @@ export const initialState: IState = {
   loadingData: null,
   messages: [],
   isReplying: false,
+  temperature: 0,
+  isCache: true,
 };
 
 export interface IAction {
@@ -28,7 +32,9 @@ export interface IAction {
     | "changeMode"
     | "updateLoading"
     | "addMessage"
-    | "toogle-isReplying"
+    | "toggleIsReplying"
+    | "changeTemperature"
+    | "toggleCache"
     | "clear";
   payload: any;
 }
@@ -51,7 +57,10 @@ export function reducer(state: IState, action: IAction): IState {
     };
   if (type === "addMessage")
     return { ...state, messages: [...state.messages, payload] };
-  if (type === "toogle-isReplying")
+  if (type === "toggleIsReplying")
     return { ...state, isReplying: !state.isReplying };
+  if (type === "toggleCache") return { ...state, isCache: !state.isCache };
+  if (type === "changeTemperature")
+    return { ...state, temperature: action.payload };
   return { ...state, messages: [] };
 }
