@@ -34,6 +34,7 @@ import {
   AIMessage,
   AIMessageContent,
 } from "@/components/ui/shadcn-io/ai/message";
+import { db } from "@/db/db";
 import { availableModels, useWebLLM } from "@/hooks/useWebLLM/useWebLLM";
 import {
   Dialog,
@@ -41,7 +42,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@radix-ui/react-dialog";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import ReactDiffViewer from "react-diff-viewer";
 
 export default function Prompt() {
@@ -56,6 +57,8 @@ export default function Prompt() {
     isCache,
     dispatch,
   } = useWebLLM();
+
+  const [isDBError, setIsDBError] = useState(false);
 
   const inputRef = useRef(null);
   const textRef = useRef(null);
@@ -371,10 +374,23 @@ export default function Prompt() {
         <RainbowButton
           className={`!p-4 w-40 ${
             isReplying ? "pointer-events-none grayscale" : ""
-          }`}
+          } ${isDBError ? "pointer-events-none text-destructive !w-60" : ""}`}
           disabled={isReplying}
+          onClick={async () => {
+            if (model && (inputRef.current as any)?.value) {
+              const id = await db.history.add({
+                model,
+                mode,
+                temperature,
+                isCache,
+                prompt: (inputRef.current as any).value,
+              });
+
+              if (!id) setIsDBError(true);
+            }
+          }}
         >
-          Save to history
+          {isDBError ? "Unable to save to history!" : "Save to history"}
         </RainbowButton>
         <InteractiveHoverButton
           disabled={isReplying}
