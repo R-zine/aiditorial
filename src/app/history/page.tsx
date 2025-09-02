@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Check, X } from "lucide-react";
 
 export default function History() {
   const histories = useLiveQuery(() => db.history.toArray());
@@ -42,10 +44,12 @@ export default function History() {
                 <TableCell>{history.model}</TableCell>
                 <TableCell>{history.mode}</TableCell>
                 <TableCell>{history.temperature}</TableCell>
-                <TableCell>{history.isCache}</TableCell>
+                <TableCell>{history.isCache ? <Check /> : <X />}</TableCell>
                 <TableCell>
                   <div className="flex gap-5">
-                    <Button className="w-15 cursor-pointer">Restore</Button>
+                    <Link href={`/prompt/${history.id}`}>
+                      <Button className="w-15 cursor-pointer">Restore</Button>
+                    </Link>
 
                     <Button
                       className="w-15 bg-destructive cursor-pointer"

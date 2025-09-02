@@ -42,10 +42,18 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@radix-ui/react-dialog";
-import { useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import ReactDiffViewer from "react-diff-viewer";
 
-export default function Prompt() {
+export default function Prompt({
+  params,
+}: {
+  params: Promise<{ historyIndex: string }>;
+}) {
+  const { historyIndex } = use(params);
+
+  const [inputOverwrite, setInputOverwrite] = useState("");
+
   const {
     model,
     isLoading,
@@ -57,6 +65,17 @@ export default function Prompt() {
     isCache,
     dispatch,
   } = useWebLLM();
+
+  useEffect(() => {
+    if (historyIndex && dispatch)
+      (async () => {
+        const savedState = await db.history.get(Number(historyIndex?.at(0)));
+        if (savedState) {
+          dispatch({ type: "restoreState", payload: savedState });
+          setInputOverwrite(savedState.prompt);
+        }
+      })();
+  }, [historyIndex, dispatch]);
 
   const [isDBError, setIsDBError] = useState(false);
 
@@ -193,6 +212,7 @@ export default function Prompt() {
               <AIInputTextarea
                 disabled={isReplying}
                 ref={inputRef}
+                defaultValue={inputOverwrite}
                 placeholder="Prompt goes here"
                 className="!pl-4 !pt-4 min-h-60"
                 onKeyDown={(e) => {
@@ -221,6 +241,7 @@ export default function Prompt() {
               <AIInputTextarea
                 disabled={isReplying}
                 ref={inputRef}
+                defaultValue={inputOverwrite}
                 placeholder="Your prompt goes here, while the paragraph/s you want to be edited should go in the box below. This is useful for developing a prompt that can be executed on your whole document batch by batch. Once you are happy with the result from this prompt you can go to the batch page from the navigator above. This mode only supports one message per 'chat'. Use the 'Clear' button to remove the messages but keep the prompt."
                 className="!pl-4 !pt-4 min-h-60 !placeholder-gray-100"
                 onKeyDown={(e) => {
@@ -294,6 +315,7 @@ export default function Prompt() {
               <AIInputTextarea
                 disabled={isReplying}
                 ref={inputRef}
+                defaultValue={inputOverwrite}
                 placeholder="Your prompt goes here, while the paragraph/s you want to be edited should go in the box below. This is useful for developing a prompt that can be executed on your whole document batch by batch. Once you are happy with the result from this prompt you can go to the batch page from the navigator above. This mode only supports one message per 'chat'. Use the 'Clear' button to remove the messages but keep the prompt."
                 className="!pl-4 !pt-4 min-h-60 !placeholder-gray-100"
                 onKeyDown={(e) => {

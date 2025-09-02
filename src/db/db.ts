@@ -9,9 +9,20 @@ interface History {
   prompt: string;
 }
 
+interface Document {
+  id: number;
+  name: string;
+  content: string[];
+  length: number;
+}
+
 const db = new Dexie("HistoriesDatabase") as Dexie & {
   history: EntityTable<
     History,
+    "id" // primary key "id" (for the typings only)
+  >;
+  document: EntityTable<
+    Document,
     "id" // primary key "id" (for the typings only)
   >;
 };
@@ -19,7 +30,8 @@ const db = new Dexie("HistoriesDatabase") as Dexie & {
 // Schema declaration:
 db.version(1).stores({
   history: "++id, model, mode, temperature, isCache, prompt", // primary key "id" (for the runtime!)
+  document: "++id, name, content, length",
 });
 
-export type { History };
+export type { History, Document };
 export { db };
