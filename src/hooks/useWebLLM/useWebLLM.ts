@@ -1,4 +1,4 @@
-import { CreateMLCEngine, MLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import { useEffect, useMemo, useReducer } from "react";
 import { initialState, reducer } from "./reducer";
 

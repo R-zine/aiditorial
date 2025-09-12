@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 const tabs = [
   {
     name: "New document",
@@ -29,7 +29,7 @@ const tabs = [
   },
   {
     name: "Job history",
-    value: "history",
+    value: "jobhistory",
   },
 ];
 
@@ -43,8 +43,7 @@ import {
 
 import { RainbowButton } from "@/components/magicui/rainbow-button";
 import { Separator } from "@/components/ui/separator";
-import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-import { DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { DialogHeader } from "@/components/ui/dialog";
 import {
   Dialog,
   DialogContent,
@@ -66,10 +65,12 @@ import {
   ComboboxTrigger,
 } from "@/components/ui/shadcn-io/combobox";
 import { Check, X } from "lucide-react";
+import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
 
 export default function Batch() {
   const documents = useLiveQuery(() => db.document.toArray());
   const histories = useLiveQuery(() => db.history.toArray());
+  const jobs = useLiveQuery(() => db.job.toArray());
 
   const [currentView, setCurrentView] = useState("newdocument");
   const [newFile, setNewFile] = useState<{
@@ -77,10 +78,86 @@ export default function Batch() {
     content: string[];
   } | null>(null);
 
+  const joinedJobs = useMemo(
+    () =>
+      jobs?.map((job) => {
+        const relatedHistory = histories?.find((h) => h.id === job.historyId);
+        const relatedDocument = documents?.find((d) => d.id === job.documentId);
+
+        return {
+          ...job,
+          history: relatedHistory,
+          document: relatedDocument,
+        };
+      }),
+    [jobs, histories, documents]
+  );
+
   const [selectedSettings, setSelectedSettings] = useState<number | null>();
   const [selectedDocument, setSelectedDocument] = useState<number | null>();
 
-  console.log(selectedDocument, selectedSettings);
+  const [isJobInProgress, setIsJobInProgress] = useState(false);
+  const [modelLoadProgress, setModelLoadProgress] = useState<null | number>();
+  const [modelLoadText, setModelLoadText] = useState("");
+  const [currentParagraph, setCurrentParagraph] = useState<null | number>(null);
+
+  const [cachedEditedContent, setCachedEditedContent] = useState<string[]>([]);
+
+  const [previewId, setPreviewId] = useState<null | number>(null);
+
+  const onJobStart = useCallback(
+    async (id: number) => {
+      const job = joinedJobs?.find((j) => j.id === id);
+      if (!job || !job.history || !job.document) return;
+
+      setIsJobInProgress(true);
+
+      const engineInstance = await CreateMLCEngine(job.history.model, {
+        initProgressCallback: (progress) => {
+          setModelLoadProgress(progress.progress);
+          setModelLoadText(progress.text);
+          console.log(progress.text);
+        },
+        appConfig: {
+          ...prebuiltAppConfig,
+          useIndexedDBCache: job.history.isCache,
+        },
+      });
+
+      const engine = await engineInstance;
+      if (!engine) return;
+      setCachedEditedContent(job.editedContent);
+      const editedContentCopy = structuredClone(job.editedContent);
+      for (let i = job.progress; i < job.document.content.length; i++) {
+        setCurrentParagraph(i);
+        const reply = await engine.chat.completions.create({
+          messages: [
+            {
+              role: "user",
+              content: `${job.history.prompt} ${job.document.content[i]}`,
+            },
+          ],
+          temperature: job.history.temperature,
+        });
+        console.log(reply.choices[0].message.content);
+        setCachedEditedContent((p) => [
+          ...p,
+          reply.choices[0].message.content ?? "",
+        ]);
+        await db.job.update(job.id, {
+          progress: i + 1,
+          editedContent: [
+            ...editedContentCopy,
+            reply.choices[0].message.content ?? "",
+          ],
+        });
+        editedContentCopy.push(reply.choices[0].message.content ?? "");
+      }
+      setCurrentParagraph(null);
+      setIsJobInProgress(false);
+    },
+    [joinedJobs]
+  );
 
   return (
     <div>
@@ -217,6 +294,7 @@ export default function Batch() {
                               content: newFile.content,
                               length: newFile.content.length,
                             });
+                            setCurrentView("newjob");
                           }}
                         >
                           Save to browser DB
@@ -333,11 +411,165 @@ export default function Batch() {
                     (!selectedSettings || !selectedDocument) &&
                     "pointer-events-none invert-25"
                   }`}
+                  onClick={() => {
+                    if (selectedDocument && selectedSettings) {
+                      db.job.add({
+                        historyId: selectedSettings,
+                        documentId: selectedDocument,
+                        editedContent: [],
+                        progress: 0,
+                      });
+                      setCurrentView("jobhistory");
+                    }
+                  }}
                 >
                   Create batch job
                 </InteractiveHoverButton>
               </CardContent>
             </Card>
+          )}
+          {currentView === "jobhistory" && (
+            <>
+              <Card>
+                <CardContent className="!p-6 bg-accent-foreground">
+                  <Table className="bg-ring gap-10 indent-2">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-150">Prompt</TableHead>
+                        <TableHead className="w-80">Model</TableHead>
+                        <TableHead className="w-60">Document Name</TableHead>
+                        <TableHead className="w-20">Progress</TableHead>
+
+                        <TableHead className="">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {joinedJobs?.map((job) => {
+                        return (
+                          <TableRow className={`h-20 `} key={job.id}>
+                            <TableCell className="font-medium">
+                              {job.history?.prompt}
+                            </TableCell>
+                            <TableCell>{job.history?.model}</TableCell>
+                            <TableCell>{job.document?.name}</TableCell>
+                            <TableCell>
+                              {job.progress}/{job.document?.length}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-5">
+                                {job.progress < (job.document?.length ?? 0) && (
+                                  <Button
+                                    className="w-18 cursor-pointer"
+                                    onClick={() => onJobStart(job.id)}
+                                  >
+                                    {job.progress ? "Resume" : "Start"}
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  className="w-30 cursor-pointer"
+                                  onClick={() => setPreviewId(job.id)}
+                                >
+                                  View results
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  className="w-40 cursor-pointer"
+                                  onClick={() =>
+                                    navigator.clipboard.writeText(
+                                      job.editedContent.join("\n")
+                                    )
+                                  }
+                                >
+                                  Copy to clipboard
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  className="w-40 cursor-pointer"
+                                  onClick={() => db.job.delete(job.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                    <TableFooter className="h-10 text-center">
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          {joinedJobs?.length
+                            ? "All data is stored locally!"
+                            : "No data to display"}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </CardContent>
+              </Card>
+              {isJobInProgress && (
+                <div className="w-[100vw] h-[100vh] top-0 left-0 fixed flex justify-center !z-1100">
+                  <Dialog modal open={isJobInProgress}>
+                    <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
+                      <DialogHeader className="text-background items-center">
+                        <DialogTitle>Batch job is in progress</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                          {currentParagraph === null
+                            ? "Your model is currently loading, see below for details"
+                            : "The LLM is editing your document, paragraphs will appear as they are ready."}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="text-muted-foreground overflow-auto max-h-[60vh] !px-10">
+                        {currentParagraph !== null ? (
+                          cachedEditedContent.map((paragraph) => (
+                            <p className="!mb-5">{paragraph}</p>
+                          ))
+                        ) : (
+                          <>
+                            <p>Loading: {modelLoadProgress}%</p>
+                            <br></br>
+                            <b>{modelLoadText}</b>
+                          </>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+              {previewId !== null && (
+                <div className="w-[100vw] h-[100vh] top-0 left-0 fixed flex justify-center !z-1100">
+                  <Dialog modal open={previewId !== null}>
+                    <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
+                      <DialogHeader className="text-background items-center">
+                        <DialogTitle>Batch job preview</DialogTitle>
+                        <DialogDescription className="text-muted-foreground">
+                          Below are the currently ready paragraphs of your batch
+                          job
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="text-muted-foreground overflow-auto max-h-[60vh] !px-10">
+                        {joinedJobs
+                          ?.find((job) => job.id === previewId)
+                          ?.editedContent.map((paragraph) => (
+                            <p className="!mb-5">{paragraph}</p>
+                          ))}
+                      </div>
+
+                      <Button
+                        variant="secondary"
+                        className="w-40 cursor-pointer"
+                        onClick={() => setPreviewId(null)}
+                      >
+                        Close
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

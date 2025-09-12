@@ -16,7 +16,16 @@ interface Document {
   length: number;
 }
 
-const db = new Dexie("HistoriesDatabase") as Dexie & {
+interface Job {
+  id: number;
+  name?: string;
+  historyId: number;
+  documentId: number;
+  progress: number;
+  editedContent: string[];
+}
+
+const db = new Dexie("AIditorialDatabase") as Dexie & {
   history: EntityTable<
     History,
     "id" // primary key "id" (for the typings only)
@@ -25,13 +34,15 @@ const db = new Dexie("HistoriesDatabase") as Dexie & {
     Document,
     "id" // primary key "id" (for the typings only)
   >;
+  job: EntityTable<Job, "id">;
 };
 
 // Schema declaration:
 db.version(1).stores({
   history: "++id, model, mode, temperature, isCache, prompt", // primary key "id" (for the runtime!)
   document: "++id, name, content, length",
+  job: "++id, name, historyId, documentId, progress, editedContent",
 });
 
-export type { History, Document };
+export type { History, Document, Job };
 export { db };
