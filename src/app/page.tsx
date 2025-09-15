@@ -42,8 +42,8 @@ export default function Home() {
       </div>
       <div className="z-1000 !mt-80">
         <TextAnimate
-          delay={3}
-          duration={3}
+          delay={2}
+          duration={1}
           animation="slideUp"
           by="word"
           once
@@ -54,8 +54,8 @@ export default function Home() {
           time.
         </TextAnimate>
         <TextAnimate
-          delay={6}
-          duration={3}
+          delay={3}
+          duration={1}
           animation="slideUp"
           by="word"
           once
@@ -64,8 +64,8 @@ export default function Home() {
           Paid options are often too expensive for hobby or school work.
         </TextAnimate>
         <TextAnimate
-          delay={9}
-          duration={3}
+          delay={4}
+          duration={1}
           animation="slideUp"
           by="word"
           once
@@ -75,8 +75,8 @@ export default function Home() {
           new models and services.
         </TextAnimate>
         <TextAnimate
-          delay={12}
-          duration={3}
+          delay={5}
+          duration={1}
           animation="slideUp"
           by="word"
           once
@@ -86,8 +86,8 @@ export default function Home() {
           like novels, for example.
         </TextAnimate>
         <TextAnimate
-          delay={15}
-          duration={5}
+          delay={6}
+          duration={2}
           animation="slideUp"
           by="word"
           once
@@ -98,8 +98,8 @@ export default function Home() {
           works that touch on sensitive or dark topics.
         </TextAnimate>
         <TextAnimate
-          delay={20}
-          duration={5}
+          delay={8}
+          duration={2}
           animation="slideUp"
           by="word"
           once
@@ -107,9 +107,7 @@ export default function Home() {
         >
           The solution? Run your own editorial LLM on your own machine via the
           browser. You don't trust me? Good. Cache the model you'll be using and
-          disable the internet for this page (or for your whole system). The
-          Google Docs integration I personally find very handy, but you
-          definitely don't need it to fully edit your own works.
+          disable the internet for this page (or for your whole system).
         </TextAnimate>
       </div>
       <Link href="/prompt">
