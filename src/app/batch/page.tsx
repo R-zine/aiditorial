@@ -6,7 +6,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableFooter,
   TableHead,
@@ -14,10 +13,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 const tabs = [
   {
     name: "New document",

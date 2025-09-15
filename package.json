@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint:check": "next lint",
+    "lint:fix": "next lint --fix"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.7.0",
