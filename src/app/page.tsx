@@ -49,9 +49,9 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl mt-200"
         >
-          Why? Free-to-use options like ChatGPT are usually wrappers for a bunch
-          of different models, which can make them fairly inconsistent across
-          time.
+          Why? Free options such as ChatGPT are typically front ends for a
+          rotating set of underlying models, which can lead to inconsistent
+          behavior over time.
         </TextAnimate>
         <TextAnimate
           delay={3}
@@ -61,7 +61,8 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl"
         >
-          Paid options are often too expensive for hobby or school work.
+          Paid services are often prohibitively expensive for hobbyist, student,
+          or exploratory work.
         </TextAnimate>
         <TextAnimate
           delay={4}
@@ -71,8 +72,9 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl"
         >
-          All options are a black box and your data could be used for training
-          new models and services.
+          Most available tools operate as black boxes, with limited transparency
+          around how data is stored or whether it may be reused for training
+          future models or services.
         </TextAnimate>
         <TextAnimate
           delay={5}
@@ -82,8 +84,8 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl"
         >
-          Token restrictions can be hard to judge when considering longer works
-          like novels, for example.
+          Token limits can be difficult to evaluate in advance, particularly for
+          longer projects such as novels or extended essays.
         </TextAnimate>
         <TextAnimate
           delay={6}
@@ -93,9 +95,10 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl"
         >
-          Finally, as these are all commercial products, they are liable for the
-          advise they give and have guardrails that can impede them when editing
-          works that touch on sensitive or dark topics.
+          Finally, as commercial products, these systems are subject to legal
+          and policy constraints. As a result, they include guardrails that can
+          interfere with editing work that addresses sensitive, controversial,
+          or dark subject matter.
         </TextAnimate>
         <TextAnimate
           delay={8}
@@ -105,9 +108,10 @@ export default function Home() {
           once
           className="text-gray-300 max-w-prose text-xl"
         >
-          The solution? Run your own editorial LLM on your own machine via the
-          browser. You don't trust me? Good. Cache the model you'll be using and
-          disable the internet for this page (or for your whole system).
+          The solution? Run a language model locally, directly in the browser.
+          If you are skeptical, that is intentional. You can cache the model in
+          advance and disable network access for this page — or for your entire
+          system — while using it.
         </TextAnimate>
       </div>
       <Link href="/prompt">

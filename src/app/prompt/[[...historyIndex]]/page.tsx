@@ -465,7 +465,7 @@ export default function Prompt({
       </div>
 
       {isLoading && (
-        <div className="w-[100vw] h-[100vh] fixed bg-black z-100">
+        <div className="w-[100vw] h-[100vh] fixed bg-black z-100000">
           <div className="w-[80vw] h-[80vh] top-[10vh] left-[10vw] fixed p-6 flex justify-center z-110  ">
             <Dialog modal open={isLoading}>
               <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
