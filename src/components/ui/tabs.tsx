@@ -26,7 +26,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+        "inline-flex min-h-11 w-fit items-center justify-center gap-1 rounded-xl border border-white/8 bg-[oklch(0.155_0.014_285/92%)] p-1 text-muted-foreground shadow-[inset_0_1px_0_oklch(1_0_0/4%)] max-sm:grid max-sm:w-full max-sm:grid-cols-3",
         className
       )}
       {...props}
@@ -42,7 +42,7 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "inline-flex min-h-9 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-[color,background-color,border-color,box-shadow] after:size-1.5 after:rounded-full after:bg-current after:opacity-0 after:content-[''] hover:border-white/15 hover:bg-white/[0.055] hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 data-[state=active]:border-[oklch(0.72_0.15_286/65%)] data-[state=active]:bg-[oklch(0.3_0.09_285/72%)] data-[state=active]:text-foreground data-[state=active]:shadow-[0_0_0_1px_oklch(0.72_0.15_286/16%),0_7px_20px_oklch(0.08_0.02_285/30%)] data-[state=active]:after:opacity-100 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50 max-sm:gap-1.5 max-sm:px-1.5 max-sm:text-xs max-sm:after:hidden [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

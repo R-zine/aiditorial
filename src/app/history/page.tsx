@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { db, type HistoryRun } from "@/db/db";
 import { downloadText } from "@/lib/documents";
 import { modeLabel, runAsMarkdown, safeFilename } from "@/lib/editor";
+import { ui } from "@/lib/ui-styles";
 
 function includesQuery(run: HistoryRun, query: string): boolean {
   const haystack = [run.prompt, run.input, run.output, run.model]
@@ -39,16 +40,22 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="app-page">
-      <section className="page-heading">
+    <div className={ui.page}>
+      <section className={ui.pageHeading}>
         <div>
-          <p className="eyebrow">Stored only in this browser</p>
-          <h1>Run history</h1>
-          <p>Review, export, or restore complete inputs and outputs.</p>
+          <p className={ui.eyebrow}>Stored only in this browser</p>
+          <h1 className={ui.pageTitle}>Run history</h1>
+          <p className={ui.pageDescription}>
+            Review, export, or restore complete inputs and outputs.
+          </p>
         </div>
-        <div className="search-field">
-          <Search aria-hidden="true" />
+        <div className="relative w-[min(20rem,100%)]">
+          <Search
+            className="absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
+            className="pl-9"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search runs"
@@ -58,7 +65,7 @@ export default function HistoryPage() {
       </section>
 
       {notice && (
-        <div className="notice" role="status">
+        <div className={ui.notice} role="status">
           <span>{notice}</span>
           <Button size="sm" variant="ghost" onClick={() => setNotice("")}>
             Dismiss
@@ -67,21 +74,23 @@ export default function HistoryPage() {
       )}
 
       {filteredRuns?.length ? (
-        <div className="history-list">
+        <div className="flex flex-col gap-3.5">
           {filteredRuns.map((run) => (
-            <Card key={run.id} className="surface-card history-card">
-              <CardHeader>
+            <Card key={run.id} className={ui.surfaceCard}>
+              <CardHeader className={ui.splitCardHeader}>
                 <div>
-                  <div className="run-meta">
+                  <div className={ui.runMeta}>
                     <Badge variant="secondary">{modeLabel(run.mode)}</Badge>
                     <time dateTime={run.createdAt}>
                       {new Date(run.createdAt).toLocaleString()}
                     </time>
                   </div>
-                  <CardTitle>{run.prompt || "Untitled run"}</CardTitle>
-                  <p className="model-name">{run.model}</p>
+                  <CardTitle className="mt-2.5 max-w-3xl overflow-hidden text-ellipsis whitespace-nowrap text-base leading-snug max-[850px]:whitespace-normal">
+                    {run.prompt || "Untitled run"}
+                  </CardTitle>
+                  <p className={ui.modelName}>{run.model}</p>
                 </div>
-                <div className="action-row compact-actions">
+                <div className={ui.compactActions}>
                   <Button asChild size="sm">
                     <Link href={`/prompt/${run.id}`}>
                       <ExternalLink /> Restore
@@ -117,21 +126,25 @@ export default function HistoryPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="run-preview-grid">
+              <CardContent className={ui.comparisonGrid}>
                 <div>
                   <span>Original</span>
-                  <p>{run.input || "No original text was saved for this legacy run."}</p>
+                  <p className="line-clamp-4 text-muted-foreground">
+                    {run.input || "No original text was saved for this legacy run."}
+                  </p>
                 </div>
                 <div>
                   <span>Edited</span>
-                  <p>{run.output || "No output was saved for this legacy run."}</p>
+                  <p className="line-clamp-4 text-muted-foreground">
+                    {run.output || "No output was saved for this legacy run."}
+                  </p>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="empty-state">
+        <div className={ui.emptyState}>
           <HistoryEmptyIcon />
           <h2>{runs?.length ? "No matching runs" : "No saved runs yet"}</h2>
           <p>Successful edits and conversations are saved here automatically.</p>
@@ -148,10 +161,10 @@ export default function HistoryPage() {
 
 function HistoryEmptyIcon() {
   return (
-    <div className="empty-icon" aria-hidden="true">
-      <span />
-      <span />
-      <span />
+    <div className="mb-2 flex flex-col gap-1" aria-hidden="true">
+      <span className="block h-1 w-8 rounded-full bg-[oklch(0.65_0.13_275/60%)]" />
+      <span className="block h-1 w-8 rounded-full bg-[oklch(0.65_0.13_275/60%)]" />
+      <span className="block h-1 w-8 rounded-full bg-[oklch(0.65_0.13_275/60%)]" />
     </div>
   );
 }

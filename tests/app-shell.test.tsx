@@ -17,10 +17,9 @@ describe("public application shell", () => {
     expect(
       screen.getByRole("heading", { name: /a calmer way to edit/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open the editor/i })).toHaveAttribute(
-      "href",
-      "/prompt",
-    );
+    const editorLink = screen.getByRole("link", { name: /open the editor/i });
+    expect(editorLink).toHaveAttribute("href", "/prompt");
+    expect(editorLink).toHaveAttribute("data-slot", "magic-rainbow-button");
     expect(screen.getByRole("link", { name: /edit a document/i })).toHaveAttribute(
       "href",
       "/batch",
@@ -30,6 +29,14 @@ describe("public application shell", () => {
       screen.getByText(/without a remote application server/i),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(document.querySelector(".magic-aurora-text")).toHaveTextContent(
+      "local language model.",
+    );
+    expect(document.querySelector('[data-slot="magic-meteors"]')).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(document.querySelector(".magic-border-beam")).not.toBeInTheDocument();
   });
 
   it("marks the current navigation section and exposes every workspace", () => {
@@ -37,8 +44,9 @@ describe("public application shell", () => {
     render(<Navbar />);
 
     expect(screen.getByRole("navigation", { name: /primary/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Editor" })).toHaveClass(
-      "nav-link-active",
+    expect(screen.getByRole("link", { name: "Editor" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
     expect(screen.getByRole("link", { name: "History" })).toHaveAttribute(
       "href",

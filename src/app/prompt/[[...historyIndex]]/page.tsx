@@ -29,9 +29,23 @@ import {
   type EditorMode,
 } from "@/db/db";
 import { composePrompt, modeLabel } from "@/lib/editor";
-import { availableModels, useWebLLM } from "@/hooks/useWebLLM/useWebLLM";
+import {
+  availableModels,
+  type EngineStatus,
+  useWebLLM,
+} from "@/hooks/useWebLLM/useWebLLM";
+import { cn } from "@/lib/utils";
+import { ui } from "@/lib/ui-styles";
 
 const modes: EditorMode[] = ["Chat", "Edit", "Compare"];
+const statusColor: Record<EngineStatus, string> = {
+  idle: "bg-muted-foreground",
+  unsupported: "bg-destructive",
+  loading: "bg-[oklch(0.78_0.13_245)]",
+  ready: "bg-[oklch(0.74_0.15_155)]",
+  generating: "bg-[oklch(0.78_0.13_245)]",
+  error: "bg-destructive",
+};
 
 function createMessage(
   role: ConversationMessage["role"],
@@ -182,24 +196,24 @@ export default function Prompt({
   };
 
   return (
-    <div className="app-page">
-      <section className="page-heading">
+    <div className={ui.page}>
+      <section className={ui.pageHeading}>
         <div>
-          <p className="eyebrow">Local writing workspace</p>
-          <h1>Editor</h1>
-          <p>
+          <p className={ui.eyebrow}>Local writing workspace</p>
+          <h1 className={ui.pageTitle}>Editor</h1>
+          <p className={ui.pageDescription}>
             Your text stays in this browser. Models are downloaded once and run
             through WebGPU on your device.
           </p>
         </div>
-        <Badge variant="outline" className="status-badge">
-          <span className={`status-dot status-${status}`} />
+        <Badge variant="outline" className="gap-2 px-3 py-2">
+          <span className={cn("size-2 rounded-full", statusColor[status])} />
           {statusLabel}
         </Badge>
       </section>
 
       {(restoreError || storageError || error) && (
-        <div className="notice notice-error" role="alert">
+        <div className={cn(ui.notice, ui.noticeError)} role="alert">
           <span>{restoreError || storageError || error}</span>
           {status === "error" && (
             <Button size="sm" variant="outline" onClick={retry}>
@@ -209,16 +223,16 @@ export default function Prompt({
         </div>
       )}
 
-      <Card className="surface-card">
-        <CardHeader>
+      <Card className={ui.surfaceCard}>
+        <CardHeader className={ui.cardHeader}>
           <CardTitle>Model and output</CardTitle>
           <CardDescription>
             Start with a small instruct model if you are unsure what your device
             can hold. Switching model or cache mode releases the current engine.
           </CardDescription>
         </CardHeader>
-        <CardContent className="settings-grid">
-          <div className="field-stack settings-model">
+        <CardContent className="grid grid-cols-[minmax(0,2fr)_minmax(8rem,0.6fr)_minmax(12rem,0.8fr)] items-end gap-4 max-[850px]:grid-cols-1">
+          <div className={ui.stack}>
             <Label htmlFor="model">Model</Label>
             <Select value={model ?? ""} onValueChange={setModel} disabled={busy}>
               <SelectTrigger id="model">
@@ -233,7 +247,7 @@ export default function Prompt({
               </SelectContent>
             </Select>
           </div>
-          <div className="field-stack">
+          <div className={ui.stack}>
             <Label htmlFor="temperature">Temperature</Label>
             <Input
               id="temperature"
@@ -246,22 +260,27 @@ export default function Prompt({
               disabled={busy}
             />
           </div>
-          <Label className="cache-control" htmlFor="cache-model">
+          <Label
+            className="flex min-h-10 cursor-pointer items-center gap-3"
+            htmlFor="cache-model"
+          >
             <Checkbox
               id="cache-model"
               checked={isCache}
               onCheckedChange={(checked) => setIsCache(checked === true)}
               disabled={busy}
             />
-            <span>
+            <span className="flex flex-col gap-0.5">
               Cache model
-              <small>Allows reuse without downloading it again.</small>
+              <small className="font-normal text-muted-foreground">
+                Allows reuse without downloading it again.
+              </small>
             </span>
           </Label>
         </CardContent>
         {status === "loading" && progress && (
-          <div className="model-progress" aria-live="polite">
-            <div>
+          <div className="flex flex-col gap-2.5 px-6 pb-6" aria-live="polite">
+            <div className={ui.progressDetails}>
               <span>{progress.text}</span>
               <span>{Math.round(progress.progress * 100)}%</span>
             </div>
@@ -273,36 +292,55 @@ export default function Prompt({
       <Tabs
         value={mode}
         onValueChange={(value) => setMode(value as EditorMode)}
-        className="workspace-tabs"
       >
-        <TabsList aria-label="Editor mode">
-          {modes.map((editorMode) => (
-            <TabsTrigger key={editorMode} value={editorMode} disabled={busy}>
-              {modeLabel(editorMode)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            id="editor-mode-label"
+            className="text-xs font-bold tracking-[0.1em] text-muted-foreground uppercase"
+          >
+            Editor mode
+          </span>
+          <TabsList aria-labelledby="editor-mode-label">
+            {modes.map((editorMode) => (
+              <TabsTrigger key={editorMode} value={editorMode} disabled={busy}>
+                {modeLabel(editorMode)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
 
       {mode === "Chat" ? (
-        <Card className="surface-card editor-card">
-          <CardHeader>
+        <Card className={cn(ui.surfaceCard, "[&_textarea]:min-h-80")}>
+          <CardHeader className={ui.cardHeader}>
             <CardTitle>Conversation</CardTitle>
             <CardDescription>
               Use Enter for a new line and Ctrl/⌘ + Enter to send.
             </CardDescription>
           </CardHeader>
-          <CardContent className="editor-stack">
-            <div className="conversation" aria-live="polite">
+          <CardContent className={ui.stack}>
+            <div
+              className="flex min-h-72 max-h-136 flex-col gap-3 overflow-y-auto p-1.5"
+              aria-live="polite"
+            >
               {messages.length ? (
                 messages.map((message) => (
-                  <article key={message.id} className={`message ${message.role}`}>
-                    <span>{message.role === "user" ? "You" : "AIditorial"}</span>
-                    <p>{message.content || "…"}</p>
+                  <article
+                    key={message.id}
+                    className={cn(
+                      "w-[min(80%,760px)] rounded-2xl border border-border bg-[oklch(0.12_0.012_285/65%)] px-4 py-3.5 max-sm:w-[94%]",
+                      message.role === "user" &&
+                        "self-end bg-[oklch(0.27_0.06_285/60%)]",
+                    )}
+                  >
+                    <span className="mb-1.5 block text-[0.7rem] font-bold text-muted-foreground uppercase">
+                      {message.role === "user" ? "You" : "AIditorial"}
+                    </span>
+                    <p className={ui.preWrap}>{message.content || "…"}</p>
                   </article>
                 ))
               ) : (
-                <div className="empty-state compact">
+                <div className={cn(ui.emptyState, ui.compactEmpty)}>
                   Ask for an edit, critique, rewrite, or explanation.
                 </div>
               )}
@@ -320,7 +358,7 @@ export default function Prompt({
               rows={6}
               disabled={busy}
             />
-            <div className="action-row">
+            <div className={ui.actionRow}>
               {status === "generating" ? (
                 <Button variant="outline" onClick={() => void cancel()}>
                   <Square /> Stop
@@ -341,19 +379,20 @@ export default function Prompt({
           </CardContent>
         </Card>
       ) : (
-        <div className="edit-workspace">
-          <Card className="surface-card editor-card">
-            <CardHeader>
+        <div className="grid grid-cols-2 items-stretch gap-4 max-[850px]:grid-cols-1">
+          <Card className={cn(ui.surfaceCard, "h-full")}>
+            <CardHeader className="min-h-24 gap-2 max-[850px]:min-h-0">
               <CardTitle>Instruction</CardTitle>
               <CardDescription>
                 Add {"<<PARAGRAPH>>"}, {"<<CONTEXT>>"}, or {"{{text}}"} where
                 the source should appear, or leave it out to append the text.
               </CardDescription>
             </CardHeader>
-            <CardContent className="editor-stack">
+            <CardContent className={cn(ui.stack, "flex-1")}>
               <Textarea
                 value={instruction}
                 onChange={(event) => setInstruction(event.target.value)}
+                className="min-h-28 resize-y"
                 rows={5}
                 disabled={busy}
               />
@@ -362,11 +401,12 @@ export default function Prompt({
                 id="source-text"
                 value={source}
                 onChange={(event) => setSource(event.target.value)}
+                className="min-h-72 resize-y"
                 placeholder="Paste your essay, scene, or paragraph…"
                 rows={14}
                 disabled={busy}
               />
-              <div className="action-row">
+              <div className={ui.actionRow}>
                 {status === "generating" ? (
                   <Button variant="outline" onClick={() => void cancel()}>
                     <Square /> Stop
@@ -376,7 +416,11 @@ export default function Prompt({
                     onClick={() => void runEdit()}
                     disabled={!canGenerate || !source.trim() || !instruction.trim()}
                   >
-                    {status === "loading" ? <LoaderCircle className="spin" /> : <Send />}
+                    {status === "loading" ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Send />
+                    )}
                     Edit locally
                   </Button>
                 )}
@@ -390,13 +434,17 @@ export default function Prompt({
                 >
                   Clear text
                 </Button>
-                {savedNotice && <span className="saved-notice"><History /> {savedNotice}</span>}
+                {savedNotice && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+                    <History /> {savedNotice}
+                  </span>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="surface-card result-card">
-            <CardHeader>
+          <Card className={cn(ui.surfaceCard, "h-full")}>
+            <CardHeader className="flex min-h-24 flex-row items-start justify-between gap-6 max-[850px]:min-h-0">
               <div>
                 <CardTitle>{mode === "Compare" ? "Before and after" : "Edited result"}</CardTitle>
                 <CardDescription>Generated output streams here as it is written.</CardDescription>
@@ -410,9 +458,9 @@ export default function Prompt({
                 <Copy /> Copy
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-1 flex-col">
               {mode === "Compare" && source ? (
-                <div className="comparison-grid">
+                <div className={cn(ui.comparisonGrid, "h-full flex-1")}>
                   <div>
                     <span>Original</span>
                     <p>{source}</p>
@@ -423,7 +471,14 @@ export default function Prompt({
                   </div>
                 </div>
               ) : (
-                <div className={`result-copy ${result ? "" : "muted-copy"}`}>
+                <div
+                  className={cn(
+                    ui.preWrap,
+                    "min-h-72 flex-1 rounded-xl border border-border bg-[oklch(0.12_0.012_285/60%)] p-4",
+                    !result && "text-muted-foreground",
+                  )}
+                  aria-live="polite"
+                >
                   {result || "The edited text will appear here."}
                 </div>
               )}

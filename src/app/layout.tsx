@@ -15,10 +15,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
+    <html
+      lang="en"
+      className="overflow-x-clip scroll-smooth bg-background [color-scheme:dark]"
+    >
+      <body className="min-h-screen overflow-x-clip bg-[radial-gradient(circle_at_10%_-10%,oklch(0.32_0.1_300/22%),transparent_32rem),var(--background)] font-sans text-foreground antialiased">
         <Navbar />
-        <main>{children}</main>
+        <main className="min-h-[calc(100vh-11rem)]">{children}</main>
         <Footer />
       </body>
     </html>

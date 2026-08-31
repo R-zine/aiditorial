@@ -42,6 +42,7 @@ import {
 import { downloadText, parseDocument, type ParsedDocument } from "@/lib/documents";
 import { acceptedDocumentText, safeFilename } from "@/lib/editor";
 import { cn } from "@/lib/utils";
+import { ui } from "@/lib/ui-styles";
 import { deleteBatchJob, ensureJobParagraphs } from "@/lib/batch";
 import {
   useBatchRunner,
@@ -235,12 +236,14 @@ export default function BatchPage() {
   };
 
   return (
-    <div className="app-page">
-      <section className="page-heading">
+    <div className={ui.page}>
+      <section className={ui.pageHeading}>
         <div>
-          <p className="eyebrow">Paragraph-by-paragraph, on device</p>
-          <h1>Batch workspace</h1>
-          <p>Import plain document text, resume local edits, review changes, and export.</p>
+          <p className={ui.eyebrow}>Paragraph-by-paragraph, on device</p>
+          <h1 className={ui.pageTitle}>Batch workspace</h1>
+          <p className={ui.pageDescription}>
+            Import plain document text, resume local edits, review changes, and export.
+          </p>
         </div>
       </section>
 
@@ -254,7 +257,10 @@ export default function BatchPage() {
 
       {(notice || operationError || batchError || runnerMessage) && (
         <div
-          className={`notice ${operationError || batchError ? "notice-error" : ""}`}
+          className={cn(
+            ui.notice,
+            (operationError || batchError) && ui.noticeError,
+          )}
           role={operationError || batchError ? "alert" : "status"}
         >
           <span>{operationError || batchError || notice || runnerMessage}</span>
@@ -273,27 +279,34 @@ export default function BatchPage() {
       )}
 
       {view === "documents" && (
-        <div className="batch-grid">
-          <Card className="surface-card">
-            <CardHeader>
+        <div className={ui.twoColumn}>
+          <Card className={cn(ui.surfaceCard, "h-full")}>
+            <CardHeader className="min-h-24 gap-2 max-[850px]:min-h-0">
               <CardTitle>Import document text</CardTitle>
               <CardDescription>
                 DOCX and ODT files up to 25 MB. Imports are local and intentionally
                 plain-text; complex formatting is not preserved.
               </CardDescription>
             </CardHeader>
-            <CardContent className="editor-stack">
-              <label className={cn(buttonVariants({ variant: "outline" }), "file-picker")}>
-                <FilePlus2 /> Choose DOCX or ODT
-                <input
-                  type="file"
-                  accept=".docx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text"
-                  onChange={(event) => void ingestFile(event.target.files?.[0])}
-                />
-              </label>
-              {importError && <p className="field-error">{importError}</p>}
+            <CardContent className="flex flex-1 flex-col gap-3.5">
+              <div className="flex min-h-32 flex-1 items-center justify-center rounded-2xl border border-dashed border-border bg-[oklch(0.12_0.012_285/35%)] p-4">
+                <label
+                  className={cn(
+                    buttonVariants({ variant: "outline" }),
+                    "relative w-fit cursor-pointer [&_input]:sr-only",
+                  )}
+                >
+                  <FilePlus2 /> Choose DOCX or ODT
+                  <input
+                    type="file"
+                    accept=".docx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text"
+                    onChange={(event) => void ingestFile(event.target.files?.[0])}
+                  />
+                </label>
+              </div>
+              {importError && <p className={ui.fieldError}>{importError}</p>}
               {parsedDocument && (
-                <div className="document-preview">
+                <div className="flex flex-col gap-2.5 border-t border-border pt-4">
                   <Label htmlFor="document-name">Document name</Label>
                   <Input
                     id="document-name"
@@ -301,18 +314,18 @@ export default function BatchPage() {
                     onChange={(event) => setDocumentName(event.target.value)}
                   />
                   <p>{parsedDocument.content.length} editable paragraphs found.</p>
-                  <ul>
+                  <ul className="m-0 pl-5 text-xs text-muted-foreground">
                     {parsedDocument.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
-                  <div className="preview-scroll">
+                  <div className="max-h-72 overflow-y-auto rounded-xl border border-border bg-[oklch(0.12_0.012_285/55%)] p-4 [&_p]:mb-3 [&_p]:leading-relaxed [&_p]:text-muted-foreground [&_p:last-child]:mb-0">
                     {parsedDocument.content.slice(0, 20).map((paragraph, index) => (
                       <p key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
                     ))}
                     {parsedDocument.content.length > 20 && <p>…and more</p>}
                   </div>
-                  <div className="action-row">
+                  <div className={ui.actionRow}>
                     <Button onClick={() => void saveDocument()} disabled={!documentName.trim()}>
                       Save locally
                     </Button>
@@ -325,19 +338,29 @@ export default function BatchPage() {
             </CardContent>
           </Card>
 
-          <Card className="surface-card">
-            <CardHeader>
+          <Card className={cn(ui.surfaceCard, "h-full")}>
+            <CardHeader className="min-h-24 gap-2 max-[850px]:min-h-0">
               <CardTitle>Local documents</CardTitle>
               <CardDescription>Only extracted paragraphs are stored.</CardDescription>
             </CardHeader>
-            <CardContent className="document-list">
+            <CardContent className="flex flex-1 flex-col gap-3.5">
               {documents?.length ? (
                 documents.map((document) => (
-                  <div key={document.id} className="document-row">
-                    <FileText aria-hidden="true" />
-                    <div>
-                      <strong>{document.name}</strong>
-                      <span>{document.length} paragraphs · {document.sourceType.toUpperCase()}</span>
+                  <div
+                    key={document.id}
+                    className="grid grid-cols-[auto_1fr_auto] items-center gap-3.5 rounded-xl border border-border p-3"
+                  >
+                    <FileText
+                      className="size-5 text-[oklch(0.75_0.1_275)]"
+                      aria-hidden="true"
+                    />
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <strong className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        {document.name}
+                      </strong>
+                      <span className="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-muted-foreground">
+                        {document.length} paragraphs · {document.sourceType.toUpperCase()}
+                      </span>
                     </div>
                     <Button
                       size="icon"
@@ -350,7 +373,9 @@ export default function BatchPage() {
                   </div>
                 ))
               ) : (
-                <div className="empty-state compact">No imported documents yet.</div>
+                <div className={cn(ui.emptyState, ui.compactEmpty, "flex-1")}>
+                  No imported documents yet.
+                </div>
               )}
             </CardContent>
           </Card>
@@ -358,15 +383,15 @@ export default function BatchPage() {
       )}
 
       {view === "create" && (
-        <Card className="surface-card form-card">
-          <CardHeader>
+        <Card className={cn(ui.surfaceCard, "max-w-[720px]")}>
+          <CardHeader className={ui.cardHeader}>
             <CardTitle>Create batch job</CardTitle>
             <CardDescription>
               Reuse the instruction and model settings from a successful editor run.
             </CardDescription>
           </CardHeader>
-          <CardContent className="form-grid">
-            <div className="field-stack">
+          <CardContent className="flex flex-col gap-4">
+            <div className={ui.stack}>
               <Label htmlFor="job-document">Document</Label>
               <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
                 <SelectTrigger id="job-document">
@@ -381,7 +406,7 @@ export default function BatchPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="field-stack">
+            <div className={ui.stack}>
               <Label htmlFor="job-run">Saved instruction</Label>
               <Select value={selectedRunId} onValueChange={setSelectedRunId}>
                 <SelectTrigger id="job-run">
@@ -396,7 +421,7 @@ export default function BatchPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="field-stack">
+            <div className={ui.stack}>
               <Label htmlFor="job-name">Job name</Label>
               <Input
                 id="job-name"
@@ -406,13 +431,14 @@ export default function BatchPage() {
               />
             </div>
             <Button
+              className="w-fit"
               onClick={() => void createJob()}
               disabled={!selectedDocumentId || !selectedRunId}
             >
               Create job
             </Button>
             {(!documents?.length || !runs?.length) && (
-              <p className="form-hint">
+              <p className="leading-relaxed text-muted-foreground">
                 {!documents?.length ? "Import a document first. " : ""}
                 {!runs?.length ? "Complete an editor run first." : ""}
               </p>
@@ -422,12 +448,17 @@ export default function BatchPage() {
       )}
 
       {view === "jobs" && (
-        <div className="job-stack">
+        <div className="flex flex-col gap-3.5">
           {activeJobId !== null && (
-            <Card className="surface-card active-job-card">
-              <CardHeader>
+            <Card
+              className={cn(
+                ui.surfaceCard,
+                "border-[oklch(0.68_0.14_275/50%)]",
+              )}
+            >
+              <CardHeader className={ui.splitCardHeader}>
                 <div>
-                  <p className="eyebrow">Running locally</p>
+                  <p className={ui.eyebrow}>Running locally</p>
                   <CardTitle>{joinedJobs.find((job) => job.id === activeJobId)?.name}</CardTitle>
                 </div>
                 <Button variant="outline" onClick={() => void pauseJob()}>
@@ -436,17 +467,24 @@ export default function BatchPage() {
               </CardHeader>
               <CardContent>
                 {loadProgress ? (
-                  <div className="model-progress">
-                    <div>
+                  <div className="flex flex-col gap-2.5">
+                    <div className={ui.progressDetails}>
                       <span>{loadProgress.text}</span>
                       <span>{Math.round(loadProgress.progress * 100)}%</span>
                     </div>
                     <progress value={loadProgress.progress} max={1} />
                   </div>
                 ) : (
-                  <div className="stream-preview" aria-live="polite">
-                    <span>Paragraph {(currentParagraph ?? 0) + 1}</span>
-                    <p>{streamedParagraph || "Generating…"}</p>
+                  <div
+                    className="min-h-28 max-h-56 overflow-y-auto rounded-xl bg-[oklch(0.12_0.012_285/55%)] p-4"
+                    aria-live="polite"
+                  >
+                    <span className={ui.previewLabel}>
+                      Paragraph {(currentParagraph ?? 0) + 1}
+                    </span>
+                    <p className={ui.preWrap}>
+                      {streamedParagraph || "Generating…"}
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -455,28 +493,34 @@ export default function BatchPage() {
 
           {joinedJobs.length ? (
             joinedJobs.map((job) => (
-              <Card key={job.id} className="surface-card job-card">
-                <CardHeader>
+              <Card key={job.id} className={ui.surfaceCard}>
+                <CardHeader className={ui.splitCardHeader}>
                   <div>
-                    <div className="run-meta">
+                    <div className={ui.runMeta}>
                       <Badge variant={job.status === "error" ? "destructive" : "secondary"}>
                         {job.status}
                       </Badge>
                       <span>{job.progress}/{job.document?.length ?? 0} complete</span>
                     </div>
-                    <CardTitle>{job.name}</CardTitle>
-                    <p className="model-name">
+                    <CardTitle className="mt-2.5 max-w-3xl overflow-hidden text-ellipsis whitespace-nowrap text-base leading-snug max-[850px]:whitespace-normal">
+                      {job.name}
+                    </CardTitle>
+                    <p className={ui.modelName}>
                       {job.document?.name ?? "Missing document"} · {job.history?.model ?? "Missing run"}
                     </p>
                   </div>
-                  <div className="action-row compact-actions">
+                  <div className={ui.compactActions}>
                     {job.status !== "completed" && (
                       <Button
                         size="sm"
                         onClick={() => void startJob(job)}
                         disabled={activeJobId !== null || !job.history || !job.document}
                       >
-                        {activeJobId === job.id ? <LoaderCircle className="spin" /> : <Play />}
+                        {activeJobId === job.id ? (
+                          <LoaderCircle className="animate-spin" />
+                        ) : (
+                          <Play />
+                        )}
                         {job.progress ? "Resume" : "Start"}
                       </Button>
                     )}
@@ -500,12 +544,12 @@ export default function BatchPage() {
                 </CardHeader>
                 <CardContent>
                   <progress value={job.progress} max={job.document?.length || 1} />
-                  {job.error && <p className="field-error">{job.error}</p>}
+                  {job.error && <p className={ui.fieldError}>{job.error}</p>}
                 </CardContent>
               </Card>
             ))
           ) : (
-            <div className="empty-state">
+            <div className={ui.emptyState}>
               <h2>No batch jobs yet</h2>
               <p>Create one from an imported document and saved editor run.</p>
               <Button onClick={() => setView("create")}>Create a job</Button>
@@ -515,14 +559,18 @@ export default function BatchPage() {
       )}
 
       {previewId !== null && previewJob && (
-        <section className="review-panel">
-          <div className="review-heading">
+        <section className="mt-4 border-t border-border pt-8">
+          <div className="mb-5 flex items-end justify-between gap-6 max-[850px]:flex-col max-[850px]:items-start">
             <div>
-              <p className="eyebrow">Review changes</p>
-              <h2>{previewJob.name}</h2>
-              <p>Accept an edit or reject it to keep the original paragraph.</p>
+              <p className={ui.eyebrow}>Review changes</p>
+              <h2 className="m-0 text-[clamp(2rem,4vw,3rem)] tracking-[-0.045em]">
+                {previewJob.name}
+              </h2>
+              <p className="mt-2 text-muted-foreground">
+                Accept an edit or reject it to keep the original paragraph.
+              </p>
             </div>
-            <div className="action-row compact-actions">
+            <div className={ui.compactActions}>
               <Button variant="outline" size="sm" onClick={() => void acceptAll()}>
                 <Check /> Accept all ready
               </Button>
@@ -546,14 +594,19 @@ export default function BatchPage() {
               </Button>
             </div>
           </div>
-          <div className="paragraph-review-list">
+          <div className="flex flex-col gap-3.5">
             {previewParagraphs?.map((paragraph) => (
-              <article key={paragraph.id} className="paragraph-review">
-                <header>
-                  <span>Paragraph {paragraph.index + 1}</span>
+              <article
+                key={paragraph.id}
+                className="rounded-2xl border border-border bg-[oklch(0.15_0.014_285/86%)] p-5"
+              >
+                <header className="flex items-center justify-between gap-3">
+                  <span className={ui.previewLabel}>
+                    Paragraph {paragraph.index + 1}
+                  </span>
                   <Badge variant="outline">{paragraph.status}</Badge>
                 </header>
-                <div className="comparison-grid">
+                <div className={ui.comparisonGrid}>
                   <div>
                     <span>Original</span>
                     <p>{paragraph.originalText}</p>
@@ -564,7 +617,7 @@ export default function BatchPage() {
                   </div>
                 </div>
                 {paragraph.editedText && (
-                  <footer>
+                  <footer className="mt-3 flex items-center justify-end gap-3">
                     <Button
                       size="sm"
                       variant={paragraph.status === "accepted" ? "default" : "outline"}
