@@ -28,7 +28,7 @@ export default function HomePage() {
         className="z-0 h-[52rem] opacity-55 [mask-image:linear-gradient(to_bottom,black_0%,black_62%,transparent_100%)]"
       />
       <div className="relative z-10 mx-auto w-[min(1180px,calc(100%_-_2rem))] pt-22 pb-24 max-sm:pt-10">
-        <section className="relative mx-auto flex min-h-136 w-full min-w-0 max-w-[900px] flex-col items-center justify-center text-center max-sm:min-h-124">
+        <section className="relative mx-auto flex min-h-136 w-full min-w-0 max-w-[1160px] flex-col items-center justify-center text-center max-sm:min-h-124">
           <div
             className="pointer-events-none absolute top-4 left-1/2 h-88 w-[min(42rem,85vw)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,oklch(0.58_0.19_290/20%),transparent_68%)] blur-xl"
             aria-hidden="true"
@@ -36,9 +36,11 @@ export default function HomePage() {
           <p className={ui.eyebrow}>
             <LockKeyhole /> Private by design · powered by WebLLM
           </p>
-          <h1 className="relative m-0 w-full min-w-0 max-w-[850px] text-[clamp(2.8rem,7vw,5.5rem)] leading-[0.98] tracking-[-0.065em] max-sm:text-[clamp(2.65rem,14vw,4.2rem)]">
-            A calmer way to edit with a{" "}
-            <AuroraText speed={0.8}>local language model.</AuroraText>
+          <h1 className="relative m-0 w-full min-w-0 max-w-[1160px] text-[clamp(2.8rem,7vw,5.5rem)] leading-[0.98] tracking-[-0.065em] max-sm:text-[clamp(2.65rem,14vw,4.2rem)]">
+            <span className="block">Edit with total privacy using a</span>
+            <AuroraText className="block" speed={0.8}>
+              local language model.
+            </AuroraText>
           </h1>
           <p className="relative mx-auto mt-7 w-full max-w-2xl text-lg leading-8 text-muted-foreground">
             Refine essays, fiction, and personal writing directly in your
@@ -85,8 +87,8 @@ export default function HomePage() {
               <FileStack />
               <h3>Process long work</h3>
               <p>
-                Apply a proven instruction paragraph by paragraph, pause
-                safely, and review every change before export.
+                Apply a proven instruction paragraph by paragraph, pause safely,
+                and review every change before export.
               </p>
             </article>
             <article className={featureCard}>
@@ -110,8 +112,8 @@ export default function HomePage() {
           <p className="m-0 leading-relaxed text-muted-foreground">
             WebLLM fetches model files when you first select a model, then
             performs inference through WebGPU. AIditorial stores runs and
-            extracted document text in IndexedDB without a remote application
-            server.
+            extracted document text in your browser&apos;s IndexedDB without a remote
+            application server.
           </p>
         </section>
       </div>

@@ -15,7 +15,7 @@ describe("public application shell", () => {
     render(<HomePage />);
 
     expect(
-      screen.getByRole("heading", { name: /a calmer way to edit/i }),
+      screen.getByRole("heading", { name: /edit with total privacy/i }),
     ).toBeInTheDocument();
     const editorLink = screen.getByRole("link", { name: /open the editor/i });
     expect(editorLink).toHaveAttribute("href", "/prompt");
