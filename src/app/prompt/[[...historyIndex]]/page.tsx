@@ -1,11 +1,9 @@
 "use client";
 
-import { AnimatedCircularProgressBar } from "@/components/magicui/animated-circular-progress-bar";
-import { BorderBeam } from "@/components/magicui/border-beam";
-
-import { InteractiveHoverButton } from "@/components/magicui/interactive-hover-button";
-import { RainbowButton } from "@/components/magicui/rainbow-button";
-import { ShimmerButton } from "@/components/magicui/shimmer-button";
+import { use, useEffect, useMemo, useState } from "react";
+import { Copy, History, LoaderCircle, RotateCcw, Send, Square } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,7 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,469 +21,414 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  AIConversation,
-  AIConversationContent,
-  AIConversationScrollButton,
-} from "@/components/ui/shadcn-io/ai/conversation";
-import { AIInput, AIInputTextarea } from "@/components/ui/shadcn-io/ai/input";
-import {
-  AIMessage,
-  AIMessageContent,
-} from "@/components/ui/shadcn-io/ai/message";
-import { db } from "@/db/db";
+  db,
+  type ConversationMessage,
+  type EditorMode,
+} from "@/db/db";
+import { composePrompt, modeLabel } from "@/lib/editor";
 import { availableModels, useWebLLM } from "@/hooks/useWebLLM/useWebLLM";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@radix-ui/react-dialog";
-import { use, useEffect, useRef, useState } from "react";
-import ReactDiffViewer from "react-diff-viewer";
+
+const modes: EditorMode[] = ["Chat", "Edit", "Compare"];
+
+function createMessage(
+  role: ConversationMessage["role"],
+  content: string,
+): ConversationMessage {
+  return { id: crypto.randomUUID(), role, content };
+}
 
 export default function Prompt({
   params,
 }: {
-  params: Promise<{ historyIndex: string }>;
+  params: Promise<{ historyIndex?: string[] }>;
 }) {
   const { historyIndex } = use(params);
-
-  const [inputOverwrite, setInputOverwrite] = useState("");
-
-  const {
+  const [model, setModel] = useState<string | null>(null);
+  const [mode, setMode] = useState<EditorMode>("Edit");
+  const [temperature, setTemperature] = useState(0.2);
+  const [isCache, setIsCache] = useState(true);
+  const [instruction, setInstruction] = useState(
+    "Improve clarity and flow while preserving the author's voice.",
+  );
+  const [source, setSource] = useState("");
+  const [draft, setDraft] = useState("");
+  const [result, setResult] = useState("");
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [savedNotice, setSavedNotice] = useState("");
+  const [restoreError, setRestoreError] = useState("");
+  const [storageError, setStorageError] = useState("");
+  const { status, progress, error, generate, cancel, retry } = useWebLLM(
     model,
-    isLoading,
-    loadingData,
-    mode,
-    messages,
-    isReplying,
-    temperature,
     isCache,
-    dispatch,
-  } = useWebLLM();
+  );
 
   useEffect(() => {
-    if (historyIndex && dispatch)
-      (async () => {
-        const savedState = await db.history.get(Number(historyIndex?.at(0)));
-        if (savedState) {
-          dispatch({ type: "restoreState", payload: savedState });
-          setInputOverwrite(savedState.prompt);
+    const id = Number(historyIndex?.[0]);
+    if (!Number.isFinite(id)) return;
+
+    void db.history
+      .get(id)
+      .then((run) => {
+        if (!run) {
+          setRestoreError("That saved run no longer exists.");
+          return;
         }
-      })();
-  }, [historyIndex, dispatch]);
+        setModel(run.model);
+        setMode(run.mode);
+        setTemperature(run.temperature);
+        setIsCache(run.isCache);
+        setInstruction(run.prompt);
+        setSource(run.input);
+        setResult(run.output);
+        setMessages(run.messages ?? []);
+      })
+      .catch(() => setRestoreError("The saved run could not be restored."));
+  }, [historyIndex]);
 
-  const [isDBError, setIsDBError] = useState(false);
+  const busy = status === "loading" || status === "generating";
+  const canGenerate = status === "ready";
+  const statusLabel = useMemo(() => {
+    if (status === "idle") return "Choose a model";
+    if (status === "loading") return "Loading model";
+    if (status === "generating") return "Writing";
+    if (status === "ready") return "Ready locally";
+    if (status === "unsupported") return "WebGPU unavailable";
+    return "Needs attention";
+  }, [status]);
 
-  const inputRef = useRef(null);
-  const textRef = useRef(null);
+  const saveRun = async (
+    prompt: string,
+    input: string,
+    output: string,
+    savedMessages?: ConversationMessage[],
+  ) => {
+    if (!model || !output.trim()) return;
+    try {
+      setStorageError("");
+      await db.history.add({
+        createdAt: new Date().toISOString(),
+        model,
+        mode,
+        temperature,
+        isCache,
+        prompt,
+        input,
+        output,
+        messages: savedMessages,
+      });
+      setSavedNotice("Saved to local history");
+      window.setTimeout(() => setSavedNotice(""), 2500);
+    } catch {
+      setStorageError(
+        "The result was generated, but this browser could not save it to local history.",
+      );
+    }
+  };
+
+  const runEdit = async () => {
+    if (!source.trim() || !instruction.trim() || !canGenerate) return;
+    setResult("");
+    setSavedNotice("");
+    try {
+      const output = await generate(
+        [{ role: "user", content: composePrompt(instruction, source) }],
+        temperature,
+        setResult,
+      );
+      await saveRun(instruction.trim(), source.trim(), output);
+    } catch {
+      // The hook exposes the actionable error in the status panel.
+    }
+  };
+
+  const sendMessage = async () => {
+    const content = draft.trim();
+    if (!content || !canGenerate) return;
+
+    const userMessage = createMessage("user", content);
+    const assistantMessage = createMessage("assistant", "");
+    const requestMessages = [...messages, userMessage];
+    setMessages([...requestMessages, assistantMessage]);
+    setDraft("");
+
+    try {
+      const output = await generate(
+        requestMessages.map(({ role, content: messageContent }) => ({
+          role,
+          content: messageContent,
+        })),
+        temperature,
+        (partial) =>
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessage.id
+                ? { ...message, content: partial }
+                : message,
+            ),
+          ),
+      );
+      const completedMessages = [
+        ...requestMessages,
+        { ...assistantMessage, content: output },
+      ];
+      setMessages(completedMessages);
+      await saveRun(content, content, output, completedMessages);
+    } catch {
+      // The hook exposes the actionable error in the status panel.
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col gap-15">
-      <div className="flex md:flex-row flex-col !gap-10 !mt-30 !ml-10 !mr-10">
-        <Card className=" w-full bg-foreground text-background !p-5 relative ">
-          <CardHeader>
-            <CardTitle>Model Select</CardTitle>
-            <CardDescription>
-              Every time you select a new LLM you might have to download and
-              cache it, which takes time depending on your connection. Please
-              make sure to have your caching preference selected before
-              selecting the model.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-between ">
-            <Select
-              value={model ?? undefined}
-              onValueChange={(value) =>
-                dispatch({ type: "changeModel", payload: value })
-              }
-            >
-              <SelectTrigger className="w-[180px] indent-2">
-                <SelectValue placeholder="Model" />
+    <div className="app-page">
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">Local writing workspace</p>
+          <h1>Editor</h1>
+          <p>
+            Your text stays in this browser. Models are downloaded once and run
+            through WebGPU on your device.
+          </p>
+        </div>
+        <Badge variant="outline" className="status-badge">
+          <span className={`status-dot status-${status}`} />
+          {statusLabel}
+        </Badge>
+      </section>
+
+      {(restoreError || storageError || error) && (
+        <div className="notice notice-error" role="alert">
+          <span>{restoreError || storageError || error}</span>
+          {status === "error" && (
+            <Button size="sm" variant="outline" onClick={retry}>
+              <RotateCcw /> Retry
+            </Button>
+          )}
+        </div>
+      )}
+
+      <Card className="surface-card">
+        <CardHeader>
+          <CardTitle>Model and output</CardTitle>
+          <CardDescription>
+            Start with a small instruct model if you are unsure what your device
+            can hold. Switching model or cache mode releases the current engine.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="settings-grid">
+          <div className="field-stack settings-model">
+            <Label htmlFor="model">Model</Label>
+            <Select value={model ?? ""} onValueChange={setModel} disabled={busy}>
+              <SelectTrigger id="model">
+                <SelectValue placeholder="Choose a WebLLM model" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 indent-2 text-accent max-h-80 w-80">
-                {availableModels.map((model) => (
-                  <SelectItem value={model} key={model}>
-                    {model}
+              <SelectContent className="max-h-80">
+                {availableModels.map((availableModel) => (
+                  <SelectItem key={availableModel.id} value={availableModel.id}>
+                    {availableModel.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-
-            <div className="flex justify-center gap-2">
-              <Label htmlFor="temperature">Temperature: </Label>
-              <Input
-                id="temperature"
-                type="number"
-                placeholder="Tempeature"
-                min={0}
-                max={2}
-                className="w-40 indent-3"
-                value={temperature}
-                onChange={(e) =>
-                  dispatch({
-                    type: "changeTemperature",
-                    payload: Number(e.target.value ?? 0),
-                  })
-                }
-              />
+          </div>
+          <div className="field-stack">
+            <Label htmlFor="temperature">Temperature</Label>
+            <Input
+              id="temperature"
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              value={temperature}
+              onChange={(event) => setTemperature(Number(event.target.value))}
+              disabled={busy}
+            />
+          </div>
+          <Label className="cache-control" htmlFor="cache-model">
+            <Checkbox
+              id="cache-model"
+              checked={isCache}
+              onCheckedChange={(checked) => setIsCache(checked === true)}
+              disabled={busy}
+            />
+            <span>
+              Cache model
+              <small>Allows reuse without downloading it again.</small>
+            </span>
+          </Label>
+        </CardContent>
+        {status === "loading" && progress && (
+          <div className="model-progress" aria-live="polite">
+            <div>
+              <span>{progress.text}</span>
+              <span>{Math.round(progress.progress * 100)}%</span>
             </div>
+            <progress value={progress.progress} max={1} />
+          </div>
+        )}
+      </Card>
 
-            <Label className=" !pt-2.5 !px-2 w-max hover:bg-accent/50 flex items-start gap-3 rounded-lg border p-3 has-[[aria-checked=true]]:border-blue-600 has-[[aria-checked=true]]:bg-blue-950 dark:has-[[aria-checked=true]]:border-blue-900 dark:has-[[aria-checked=true]]:bg-blue-950">
-              <Checkbox
-                id="toggle-2"
-                checked={isCache}
-                onClick={() => dispatch({ type: "toggleCache", payload: null })}
-                className="data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 !data-[state=checked]:text-[black] dark:data-[state=checked]:border-blue-700 dark:data-[state=checked]:bg-blue-700"
-              />
-              <div className="grid gap-1.5 font-normal">
-                <p className="text-sm leading-none font-medium">
-                  Enable indexedDB caching
-                </p>
-              </div>
-            </Label>
-          </CardContent>
+      <Tabs
+        value={mode}
+        onValueChange={(value) => setMode(value as EditorMode)}
+        className="workspace-tabs"
+      >
+        <TabsList aria-label="Editor mode">
+          {modes.map((editorMode) => (
+            <TabsTrigger key={editorMode} value={editorMode} disabled={busy}>
+              {modeLabel(editorMode)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-          <BorderBeam duration={8} size={100} />
-        </Card>
-        <Card className="w-full bg-foreground text-background !p-5 relative ">
+      {mode === "Chat" ? (
+        <Card className="surface-card editor-card">
           <CardHeader>
-            <CardTitle>Mode Select</CardTitle>
+            <CardTitle>Conversation</CardTitle>
             <CardDescription>
-              Choose between typical chatbot style where you and the LLM use the
-              same input space to communicate, separated prompt and response
-              which is useful when trying to automate the editing from a batch
-              job, and separated prompt and response with a before and after
-              comparison.
+              Use Enter for a new line and Ctrl/⌘ + Enter to send.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Select
-              value={mode}
-              onValueChange={(value) =>
-                dispatch({ type: "changeMode", payload: value })
-              }
-            >
-              <SelectTrigger className="w-[180px] indent-2">
-                <SelectValue placeholder="Mode" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 indent-2 text-accent">
-                <SelectItem value="Standard">Standard</SelectItem>
-                <SelectItem value="Separate">Separate</SelectItem>
-                <SelectItem value="Separate with comparison">
-                  Separate with comparison
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent>
-
-          <BorderBeam duration={8} delay={4} size={100} />
-        </Card>
-      </div>
-      {mode === "Standard" && (
-        <div className="flex justify-center w-full">
-          <div className="min-w-[90vw] flex flex-col gap-10">
-            <div className="relative flex size-full flex-col divide-y overflow-hidden">
-              <AIConversation className="relative size-full rounded-lg border bg-foreground text-background !p-4 min-h-80">
-                <AIConversationContent>
-                  {messages.map((message) => (
-                    <AIMessage from={message.role}>
-                      <AIMessageContent className="!mb-5 !px-3 !py-1">
-                        {message.content}
-                      </AIMessageContent>
-                    </AIMessage>
-                  ))}
-                  {isReplying && (
-                    <AIMessage from="assistant">
-                      <AIMessageContent className="!mb-5 !px-3 !py-1">
-                        Calculating a reply...
-                      </AIMessageContent>
-                    </AIMessage>
-                  )}
-                </AIConversationContent>
-                <AIConversationScrollButton />
-              </AIConversation>
-            </div>
-            <AIInput className="bg-accent-foreground text-background min-h-60 ">
-              <AIInputTextarea
-                disabled={isReplying}
-                ref={inputRef}
-                defaultValue={inputOverwrite}
-                placeholder="Prompt goes here"
-                className="!pl-4 !pt-4 min-h-60"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (inputRef.current) {
-                      dispatch({
-                        type: "addMessage",
-                        payload: {
-                          role: "user",
-                          content: (inputRef.current as any).value,
-                        },
-                      });
-                      (inputRef.current as any).value = "";
-                    }
-                  }
-                }}
-              />
-            </AIInput>
-          </div>
-        </div>
-      )}
-      {mode === "Separate" && (
-        <div className="flex justify-center w-full">
-          <div className="min-w-[90vw] flex flex-col gap-10">
-            <AIInput className="bg-accent-foreground text-background min-h-40 max-w-[90vw]">
-              <AIInputTextarea
-                disabled={isReplying}
-                ref={inputRef}
-                defaultValue={inputOverwrite}
-                placeholder="Your prompt goes here, while the paragraph/s you want to be edited should go in the box below. This is useful for developing a prompt that can be executed on your whole document batch by batch. Once you are happy with the result from this prompt you can go to the batch page from the navigator above. This mode only supports one message per 'chat'. Use the 'Clear' button to remove the messages but keep the prompt."
-                className="!pl-4 !pt-4 min-h-60 !placeholder-gray-100"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (inputRef.current) {
-                      dispatch({
-                        type: "addMessage",
-                        payload: {
-                          role: "user",
-                          content: (inputRef.current as any).value,
-                        },
-                      });
-                      (inputRef.current as any).value = "";
-                    }
-                  }
-                }}
-              />
-            </AIInput>
-            <div className="flex max-w-[90vw] gap-10">
-              <AIInput className="bg-accent-foreground text-background min-h-70 w-[50%]">
-                <AIInputTextarea
-                  disabled={isReplying}
-                  ref={textRef}
-                  placeholder="Your text goes here. It is appended to the end of your prompt."
-                  className="!pl-4 !pt-4 min-h-70 !placeholder-gray-100"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      if (inputRef.current) {
-                        dispatch({
-                          type: "addMessage",
-                          payload: {
-                            role: "user",
-                            content: (inputRef.current as any).value,
-                          },
-                        });
-                        (inputRef.current as any).value = "";
-                      }
-                    }
-                  }}
-                />
-              </AIInput>
-              <AIConversation className=" rounded-lg border bg-foreground text-background !p-4 min-h-50 min-w-[50%]">
-                <AIConversationContent>
-                  {!isReplying && (
-                    <AIMessage from={"assistant"}>
-                      <AIMessageContent className="!mb-5 !px-3 !py-1">
-                        {messages.at(1)?.content ??
-                          "The AI response will appear here..."}
-                      </AIMessageContent>
-                    </AIMessage>
-                  )}
-
-                  {isReplying && (
-                    <AIMessage from="assistant">
-                      <AIMessageContent className="!mb-5 !px-3 !py-1">
-                        Calculating a reply...
-                      </AIMessageContent>
-                    </AIMessage>
-                  )}
-                </AIConversationContent>
-                <AIConversationScrollButton />
-              </AIConversation>
-            </div>
-          </div>
-        </div>
-      )}
-      {mode === "Separate with comparison" && (
-        <div className="flex justify-center w-full">
-          <div className="min-w-[90vw] flex flex-col gap-10">
-            <AIInput className="bg-accent-foreground text-background min-h-40 max-w-[90vw]">
-              <AIInputTextarea
-                disabled={isReplying}
-                ref={inputRef}
-                defaultValue={inputOverwrite}
-                placeholder="Your prompt goes here, while the paragraph/s you want to be edited should go in the box below. This is useful for developing a prompt that can be executed on your whole document batch by batch. Once you are happy with the result from this prompt you can go to the batch page from the navigator above. This mode only supports one message per 'chat'. Use the 'Clear' button to remove the messages but keep the prompt."
-                className="!pl-4 !pt-4 min-h-60 !placeholder-gray-100"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (inputRef.current) {
-                      dispatch({
-                        type: "addMessage",
-                        payload: {
-                          role: "user",
-                          content: (inputRef.current as any).value,
-                        },
-                      });
-                      (inputRef.current as any).value = "";
-                    }
-                  }
-                }}
-              />
-            </AIInput>
-            {!messages.length ? (
-              <div className="flex max-w-[90vw] gap-10">
-                <AIInput className="bg-accent-foreground text-background min-h-70 w-[50%]">
-                  <AIInputTextarea
-                    disabled={isReplying}
-                    ref={textRef}
-                    placeholder="Your text goes here. It is appended to the end of your prompt. After receiving the reply, this will be replaced by a text comparison component."
-                    className="!pl-4 !pt-4 min-h-70 !placeholder-gray-100"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        if (inputRef.current) {
-                          dispatch({
-                            type: "addMessage",
-                            payload: {
-                              role: "user",
-                              content: (inputRef.current as any).value,
-                            },
-                          });
-                          (inputRef.current as any).value = "";
-                        }
-                      }
-                    }}
-                  />
-                </AIInput>
-                <AIConversation className=" rounded-lg border bg-foreground text-background !p-4 min-h-50 min-w-[50%]">
-                  <AIConversationContent>
-                    {!isReplying && (
-                      <AIMessage from={"assistant"}>
-                        <AIMessageContent className="!mb-5 !px-3 !py-1">
-                          {messages.at(1)?.content ??
-                            "The AI response will appear here..."}
-                        </AIMessageContent>
-                      </AIMessage>
-                    )}
-
-                    {isReplying && (
-                      <AIMessage from="assistant">
-                        <AIMessageContent className="!mb-5 !px-3 !py-1">
-                          Calculating a reply...
-                        </AIMessageContent>
-                      </AIMessage>
-                    )}
-                  </AIConversationContent>
-                  <AIConversationScrollButton />
-                </AIConversation>
-              </div>
-            ) : (
-              <div className="w-[90vw]">
-                <ReactDiffViewer
-                  oldValue={messages[0].content}
-                  newValue={messages[1]?.content ?? ""}
-                  hideLineNumbers
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      <div className="flex gap-10 justify-center ">
-        <RainbowButton
-          className={`!p-4 w-40 ${
-            isReplying ? "pointer-events-none grayscale" : ""
-          } ${isDBError ? "pointer-events-none text-destructive !w-60" : ""}`}
-          disabled={isReplying}
-          onClick={async () => {
-            if (model && (inputRef.current as any)?.value) {
-              const id = await db.history.add({
-                model,
-                mode,
-                temperature,
-                isCache,
-                prompt: (inputRef.current as any).value,
-              });
-
-              if (!id) setIsDBError(true);
-            }
-          }}
-        >
-          {isDBError ? "Unable to save to history!" : "Save to history"}
-        </RainbowButton>
-        <InteractiveHoverButton
-          disabled={isReplying}
-          className={`!p-1 w-30 !pl-6 ${
-            isReplying || (messages.length && mode !== "Standard")
-              ? "pointer-events-none grayscale invert-80"
-              : ""
-          }`}
-          onClick={() => {
-            if (inputRef.current) {
-              if (mode === "Standard") {
-                dispatch({
-                  type: "addMessage",
-                  payload: {
-                    role: "user",
-                    content: (inputRef.current as any).value,
-                  },
-                });
-                (inputRef.current as any).value = "";
-              } else {
-                if (textRef.current) {
-                  dispatch({
-                    type: "addMessage",
-                    payload: {
-                      role: "user",
-                      content:
-                        (inputRef.current as any).value +
-                        (textRef.current as any).value,
-                    },
-                  });
-                }
-              }
-            }
-          }}
-        >
-          Prompt
-        </InteractiveHoverButton>
-        <ShimmerButton
-          onClick={() => {
-            dispatch({ type: "clear", payload: null });
-            if (mode !== "Standard") (textRef.current as any).value = "";
-          }}
-          disabled={isReplying}
-          className={`!py-1 w-30 text-(--destructive) ${
-            isReplying ? "pointer-events-none grayscale" : ""
-          }`}
-        >
-          Clear
-        </ShimmerButton>
-      </div>
-
-      {isLoading && (
-        <div className="w-[100vw] h-[100vh] fixed bg-black z-100000">
-          <div className="w-[80vw] h-[80vh] top-[10vh] left-[10vw] fixed p-6 flex justify-center z-110  ">
-            <Dialog modal open={isLoading}>
-              <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
-                <DialogHeader className="text-background items-center">
-                  <DialogTitle>Model Loading</DialogTitle>
-                  <DialogDescription className="text-muted-foreground">
-                    Your chosen model is currently loading, details below...
-                  </DialogDescription>
-                </DialogHeader>
-
-                <AnimatedCircularProgressBar
-                  value={Number(loadingData?.percent) * 100}
-                  gaugePrimaryColor="rgb(80.2% 0.134 225)"
-                  gaugeSecondaryColor="rgb(60.4% 0.26 302)"
-                />
-                <div className="text-muted-foreground">
-                  {loadingData?.message}
+          <CardContent className="editor-stack">
+            <div className="conversation" aria-live="polite">
+              {messages.length ? (
+                messages.map((message) => (
+                  <article key={message.id} className={`message ${message.role}`}>
+                    <span>{message.role === "user" ? "You" : "AIditorial"}</span>
+                    <p>{message.content || "…"}</p>
+                  </article>
+                ))
+              ) : (
+                <div className="empty-state compact">
+                  Ask for an edit, critique, rewrite, or explanation.
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+              )}
+            </div>
+            <Textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  void sendMessage();
+                }
+              }}
+              placeholder="Paste a passage or ask a writing question…"
+              rows={6}
+              disabled={busy}
+            />
+            <div className="action-row">
+              {status === "generating" ? (
+                <Button variant="outline" onClick={() => void cancel()}>
+                  <Square /> Stop
+                </Button>
+              ) : (
+                <Button onClick={() => void sendMessage()} disabled={!canGenerate || !draft.trim()}>
+                  <Send /> Send
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                onClick={() => setMessages([])}
+                disabled={busy || !messages.length}
+              >
+                Clear conversation
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="edit-workspace">
+          <Card className="surface-card editor-card">
+            <CardHeader>
+              <CardTitle>Instruction</CardTitle>
+              <CardDescription>
+                Add {"<<PARAGRAPH>>"}, {"<<CONTEXT>>"}, or {"{{text}}"} where
+                the source should appear, or leave it out to append the text.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="editor-stack">
+              <Textarea
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                rows={5}
+                disabled={busy}
+              />
+              <Label htmlFor="source-text">Text to edit</Label>
+              <Textarea
+                id="source-text"
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                placeholder="Paste your essay, scene, or paragraph…"
+                rows={14}
+                disabled={busy}
+              />
+              <div className="action-row">
+                {status === "generating" ? (
+                  <Button variant="outline" onClick={() => void cancel()}>
+                    <Square /> Stop
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => void runEdit()}
+                    disabled={!canGenerate || !source.trim() || !instruction.trim()}
+                  >
+                    {status === "loading" ? <LoaderCircle className="spin" /> : <Send />}
+                    Edit locally
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSource("");
+                    setResult("");
+                  }}
+                  disabled={busy || (!source && !result)}
+                >
+                  Clear text
+                </Button>
+                {savedNotice && <span className="saved-notice"><History /> {savedNotice}</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="surface-card result-card">
+            <CardHeader>
+              <div>
+                <CardTitle>{mode === "Compare" ? "Before and after" : "Edited result"}</CardTitle>
+                <CardDescription>Generated output streams here as it is written.</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void navigator.clipboard.writeText(result)}
+                disabled={!result}
+              >
+                <Copy /> Copy
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {mode === "Compare" && source ? (
+                <div className="comparison-grid">
+                  <div>
+                    <span>Original</span>
+                    <p>{source}</p>
+                  </div>
+                  <div>
+                    <span>Edited</span>
+                    <p>{result || "The edited text will appear here."}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className={`result-copy ${result ? "" : "muted-copy"}`}>
+                  {result || "The edited text will appear here."}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

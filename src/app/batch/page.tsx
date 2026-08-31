@@ -1,36 +1,21 @@
 "use client";
 
-import { db } from "@/db/db";
+import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCallback, useMemo, useState } from "react";
-const tabs = [
-  {
-    name: "New document",
-    value: "newdocument",
-  },
-  {
-    name: "New batch job",
-    value: "newjob",
-  },
-  {
-    name: "Job history",
-    value: "jobhistory",
-  },
-];
-
+  Check,
+  Copy,
+  Download,
+  FilePlus2,
+  FileText,
+  LoaderCircle,
+  Pause,
+  Play,
+  Trash2,
+  X,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -38,539 +23,569 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-import { RainbowButton } from "@/components/magicui/rainbow-button";
-import { Separator } from "@/components/ui/separator";
-import { DialogHeader } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@radix-ui/react-dialog";
-import { InteractiveHoverButton } from "@/components/magicui/interactive-hover-button";
-import { ShimmerButton } from "@/components/magicui/shimmer-button";
-import JSZip from "jszip";
-
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxGroup,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxTrigger,
-} from "@/components/ui/shadcn-io/combobox";
-import { Check, X } from "lucide-react";
-import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+  db,
+  type BatchJob,
+  type JobParagraph,
+  type LocalDocument,
+} from "@/db/db";
+import { downloadText, parseDocument, type ParsedDocument } from "@/lib/documents";
+import { acceptedDocumentText, safeFilename } from "@/lib/editor";
+import { cn } from "@/lib/utils";
+import { deleteBatchJob, ensureJobParagraphs } from "@/lib/batch";
+import {
+  useBatchRunner,
+  type BatchRunTarget,
+} from "@/hooks/useBatchRunner/useBatchRunner";
 
-export default function Batch() {
-  const documents = useLiveQuery(() => db.document.toArray());
-  const histories = useLiveQuery(() => db.history.toArray());
-  const jobs = useLiveQuery(() => db.job.toArray());
+type BatchView = "documents" | "create" | "jobs";
 
-  const [currentView, setCurrentView] = useState("newdocument");
-  const [newFile, setNewFile] = useState<{
-    name: string;
-    content: string[];
-  } | null>(null);
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "An unexpected batch error occurred.";
+}
 
-  const joinedJobs = useMemo(
+export default function BatchPage() {
+  const documents = useLiveQuery(() => db.document.orderBy("createdAt").reverse().toArray());
+  const runs = useLiveQuery(() => db.history.orderBy("createdAt").reverse().toArray());
+  const jobs = useLiveQuery(() => db.job.orderBy("createdAt").reverse().toArray());
+  const [view, setView] = useState<BatchView>("documents");
+  const [parsedDocument, setParsedDocument] = useState<ParsedDocument | null>(null);
+  const [documentName, setDocumentName] = useState("");
+  const [importError, setImportError] = useState("");
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [jobName, setJobName] = useState("");
+  const [notice, setNotice] = useState("");
+  const [operationError, setOperationError] = useState("");
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const {
+    activeJobId,
+    loadProgress,
+    currentParagraph,
+    streamedParagraph,
+    error: batchError,
+    message: runnerMessage,
+    start: startJob,
+    pause: pauseJob,
+    clearFeedback,
+  } = useBatchRunner();
+
+  const previewParagraphs = useLiveQuery<JobParagraph[], JobParagraph[]>(
     () =>
-      jobs?.map((job) => {
-        const relatedHistory = histories?.find((h) => h.id === job.historyId);
-        const relatedDocument = documents?.find((d) => d.id === job.documentId);
-
-        return {
-          ...job,
-          history: relatedHistory,
-          document: relatedDocument,
-        };
-      }),
-    [jobs, histories, documents]
+      previewId === null
+        ? Promise.resolve([] as JobParagraph[])
+        : db.jobParagraph.where("jobId").equals(previewId).sortBy("index"),
+    [previewId],
+    [] as JobParagraph[],
   );
 
-  const [selectedSettings, setSelectedSettings] = useState<number | null>();
-  const [selectedDocument, setSelectedDocument] = useState<number | null>();
+  const joinedJobs = useMemo<BatchRunTarget[]>(
+    () =>
+      (jobs ?? []).map((job) => ({
+        ...job,
+        history: runs?.find((run) => run.id === job.historyId),
+        document: documents?.find((document) => document.id === job.documentId),
+      })),
+    [documents, jobs, runs],
+  );
 
-  const [isJobInProgress, setIsJobInProgress] = useState(false);
-  const [modelLoadProgress, setModelLoadProgress] = useState<null | number>();
-  const [modelLoadText, setModelLoadText] = useState("");
-  const [currentParagraph, setCurrentParagraph] = useState<null | number>(null);
+  const performLocalOperation = async (operation: () => Promise<void>) => {
+    try {
+      setOperationError("");
+      await operation();
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  };
 
-  const [cachedEditedContent, setCachedEditedContent] = useState<string[]>([]);
+  const ingestFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImportError("");
+    try {
+      const parsed = await parseDocument(file);
+      setParsedDocument(parsed);
+      setDocumentName(parsed.name);
+    } catch (error) {
+      setImportError(errorMessage(error));
+    }
+  };
 
-  const [previewId, setPreviewId] = useState<null | number>(null);
+  const saveDocument = async () => {
+    if (!parsedDocument || !documentName.trim()) return;
+    try {
+      setOperationError("");
+      const id = await db.document.add({
+        createdAt: new Date().toISOString(),
+        name: documentName.trim(),
+        sourceType: parsedDocument.sourceType,
+        content: parsedDocument.content,
+        length: parsedDocument.content.length,
+      });
+      setParsedDocument(null);
+      setDocumentName("");
+      setSelectedDocumentId(String(id));
+      setView("create");
+      setNotice("Document saved locally.");
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  };
 
-  const onJobStart = useCallback(
-    async (id: number) => {
-      const job = joinedJobs?.find((j) => j.id === id);
-      if (!job || !job.history || !job.document) return;
+  const createJob = async () => {
+    const documentId = Number(selectedDocumentId);
+    const historyId = Number(selectedRunId);
+    const document = documents?.find((item) => item.id === documentId);
+    const run = runs?.find((item) => item.id === historyId);
+    if (!document || !run) return;
 
-      setIsJobInProgress(true);
-
-      const engineInstance = await CreateMLCEngine(job.history.model, {
-        initProgressCallback: (progress) => {
-          setModelLoadProgress(progress.progress);
-          setModelLoadText(progress.text);
-          console.log(progress.text);
-        },
-        appConfig: {
-          ...prebuiltAppConfig,
-          useIndexedDBCache: job.history.isCache,
-        },
+    try {
+      setOperationError("");
+      await db.transaction("rw", db.job, db.jobParagraph, async () => {
+        const id = await db.job.add({
+          createdAt: new Date().toISOString(),
+          name: jobName.trim() || `${document.name} edit`,
+          historyId,
+          documentId,
+          status: "pending",
+          progress: 0,
+        });
+        await db.jobParagraph.bulkAdd(
+          document.content.map((originalText, index) => ({
+            jobId: id,
+            index,
+            originalText,
+            editedText: "",
+            status: "pending",
+          })),
+        );
       });
 
-      const engine = await engineInstance;
-      if (!engine) return;
-      setCachedEditedContent(job.editedContent);
-      const editedContentCopy = structuredClone(job.editedContent);
-      for (let i = job.progress; i < job.document.content.length; i++) {
-        setCurrentParagraph(i);
-        const reply = await engine.chat.completions.create({
-          messages: [
-            {
-              role: "user",
-              content: `${job.history.prompt} ${job.document.content[i]}`,
-            },
-          ],
-          temperature: job.history.temperature,
-        });
-        console.log(reply.choices[0].message.content);
-        setCachedEditedContent((p) => [
-          ...p,
-          reply.choices[0].message.content ?? "",
-        ]);
-        await db.job.update(job.id, {
-          progress: i + 1,
-          editedContent: [
-            ...editedContentCopy,
-            reply.choices[0].message.content ?? "",
-          ],
-        });
-        editedContentCopy.push(reply.choices[0].message.content ?? "");
+      setJobName("");
+      setView("jobs");
+      setNotice("Batch job created.");
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    }
+  };
+
+  const setParagraphStatus = async (id: number, status: "accepted" | "rejected") => {
+    await performLocalOperation(async () => {
+      await db.jobParagraph.update(id, { status });
+    });
+  };
+
+  const acceptAll = async () => {
+    if (previewId === null) return;
+    await performLocalOperation(async () => {
+      await db.jobParagraph
+        .where("jobId")
+        .equals(previewId)
+        .filter((paragraph) => paragraph.status === "complete")
+        .modify({ status: "accepted" });
+    });
+  };
+
+  const deleteJob = async (job: BatchJob) => {
+    if (!window.confirm(`Delete “${job.name}” and all of its results?`)) return;
+    await performLocalOperation(async () => {
+      await deleteBatchJob(job.id);
+      if (previewId === job.id) setPreviewId(null);
+    });
+  };
+
+  const openPreview = async (job: BatchRunTarget) => {
+    await performLocalOperation(async () => {
+      if (job.document) await ensureJobParagraphs(job, job.document);
+      setPreviewId(job.id);
+    });
+  };
+
+  const deleteDocument = async (document: LocalDocument) => {
+    await performLocalOperation(async () => {
+      const linkedJobs = await db.job.where("documentId").equals(document.id).count();
+      if (linkedJobs) {
+        setNotice("Delete this document's batch jobs before deleting the document.");
+        return;
       }
-      setCurrentParagraph(null);
-      setIsJobInProgress(false);
-    },
-    [joinedJobs]
-  );
+      if (!window.confirm(`Delete “${document.name}” from this browser?`)) return;
+      await db.document.delete(document.id);
+    });
+  };
+
+  const previewJob = joinedJobs.find((job) => job.id === previewId);
+  const exportPreview = (extension: "txt" | "md") => {
+    if (!previewJob?.document || !previewParagraphs?.length) return;
+    const content = acceptedDocumentText(previewParagraphs);
+    const basename = safeFilename(previewJob.document.name);
+    downloadText(
+      `${basename}-edited.${extension}`,
+      content,
+      extension === "md" ? "text/markdown;charset=utf-8" : undefined,
+    );
+  };
 
   return (
-    <div>
-      <div className="min-h-screen flex flex-col gap-15">
-        <div className="!mt-30 !ml-10 !mr-10">
-          <div className="!w-full !max-w-md !p-6">
-            <Tabs defaultValue="newdocument">
-              <TabsList>
-                {tabs.map((tab) => (
-                  <TabsTrigger
-                    className="!px-3"
-                    key={tab.value}
-                    value={tab.value}
-                    onClick={() => setCurrentView(tab.value)}
-                  >
-                    {tab.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-          {currentView === "newdocument" && (
-            <>
-              <div className="!w-full !p-6 !flex !justify-center">
-                <Card className="w-full !p-6 bg-foreground text-background">
-                  <CardHeader>
-                    <CardTitle>Ingest a new document</CardTitle>
-                    <CardDescription>
-                      You can use the form below to ingest a new .DOCX or .ODT
-                      document. The contents of the file are not uploaded
-                      anywhere and are stored in the browser's memory for later
-                      use.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex !gap-10 align-middle">
-                      <RainbowButton
-                        className="!p-5"
-                        onClick={(e) => (e.target as any).children[0].click()}
-                      >
-                        Ingest a .DOCX
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={async (e) => {
-                            // @ts-ignore
-                            const file = e.target.files[0];
-                            if (!file) return;
-                            const arrayBuffer = await file.arrayBuffer();
-                            const { default: mammoth } = await import(
-                              // @ts-ignore
-                              "mammoth/mammoth.browser"
-                            );
+    <div className="app-page">
+      <section className="page-heading">
+        <div>
+          <p className="eyebrow">Paragraph-by-paragraph, on device</p>
+          <h1>Batch workspace</h1>
+          <p>Import plain document text, resume local edits, review changes, and export.</p>
+        </div>
+      </section>
 
-                            const result = await mammoth.extractRawText({
-                              arrayBuffer,
-                            });
+      <Tabs value={view} onValueChange={(value) => setView(value as BatchView)}>
+        <TabsList aria-label="Batch workspace section">
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="create">Create job</TabsTrigger>
+          <TabsTrigger value="jobs">Jobs</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-                            const resultArr = result.value.split("\n\n");
+      {(notice || operationError || batchError || runnerMessage) && (
+        <div
+          className={`notice ${operationError || batchError ? "notice-error" : ""}`}
+          role={operationError || batchError ? "alert" : "status"}
+        >
+          <span>{operationError || batchError || notice || runnerMessage}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setNotice("");
+              setOperationError("");
+              clearFeedback();
+            }}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
 
-                            setNewFile({ name: file.name, content: resultArr });
-                          }}
-                        />
-                      </RainbowButton>
-                      <Separator orientation="vertical" className="!h-12" />
-                      <RainbowButton
-                        variant="outline"
-                        className="!p-5"
-                        onClick={(e) => (e.target as any).children[0].click()}
-                      >
-                        Ingest an .ODT
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={async (e) => {
-                            // @ts-ignore
-                            const file = e.target.files[0];
-                            if (!file) return;
-                            const arrayBuffer = await file.arrayBuffer();
-                            const zip = await JSZip.loadAsync(arrayBuffer);
-
-                            // @ts-ignore
-                            const contentXml = await zip
-                              .file("content.xml")
-                              .async("string");
-
-                            const parser = new DOMParser();
-                            const xmlDoc = parser.parseFromString(
-                              contentXml,
-                              "application/xml"
-                            );
-
-                            // ODT text is inside <text:p> elements
-                            const paragraphs = Array.from(
-                              xmlDoc.getElementsByTagName("text:p")
-                            ).flatMap((p) =>
-                              p.textContent ? p.textContent : []
-                            );
-
-                            setNewFile({
-                              name: file.name,
-                              content: paragraphs,
-                            });
-                          }}
-                        />
-                      </RainbowButton>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-              {newFile && (
-                <div className="w-[100vw] h-[100vh] top-0 left-0 fixed flex justify-center !z-1100">
-                  <Dialog modal open={!!newFile}>
-                    <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
-                      <DialogHeader className="text-background items-center">
-                        <DialogTitle>Document preview</DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          Below you can see how your document was ingested. You
-                          also able to change the name of the document.
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="text-muted-foreground overflow-auto max-h-[60vh] !px-10">
-                        {newFile.content.map((paragraph) => (
-                          <p>{paragraph}</p>
-                        ))}
-                      </div>
-                      <div className="flex gap-20 items-center">
-                        <InteractiveHoverButton
-                          className="!px-6 !py-3"
-                          onClick={async () => {
-                            await db.document.add({
-                              name: newFile.name,
-                              content: newFile.content,
-                              length: newFile.content.length,
-                            });
-                            setCurrentView("newjob");
-                          }}
-                        >
-                          Save to browser DB
-                        </InteractiveHoverButton>
-                        <ShimmerButton
-                          onClick={() => {
-                            setNewFile(null);
-                            window.location.reload();
-                          }}
-                          className="!px-6 !py-3 text-destructive"
-                        >
-                          Cancel
-                        </ShimmerButton>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+      {view === "documents" && (
+        <div className="batch-grid">
+          <Card className="surface-card">
+            <CardHeader>
+              <CardTitle>Import document text</CardTitle>
+              <CardDescription>
+                DOCX and ODT files up to 25 MB. Imports are local and intentionally
+                plain-text; complex formatting is not preserved.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="editor-stack">
+              <label className={cn(buttonVariants({ variant: "outline" }), "file-picker")}>
+                <FilePlus2 /> Choose DOCX or ODT
+                <input
+                  type="file"
+                  accept=".docx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text"
+                  onChange={(event) => void ingestFile(event.target.files?.[0])}
+                />
+              </label>
+              {importError && <p className="field-error">{importError}</p>}
+              {parsedDocument && (
+                <div className="document-preview">
+                  <Label htmlFor="document-name">Document name</Label>
+                  <Input
+                    id="document-name"
+                    value={documentName}
+                    onChange={(event) => setDocumentName(event.target.value)}
+                  />
+                  <p>{parsedDocument.content.length} editable paragraphs found.</p>
+                  <ul>
+                    {parsedDocument.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                  <div className="preview-scroll">
+                    {parsedDocument.content.slice(0, 20).map((paragraph, index) => (
+                      <p key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
+                    ))}
+                    {parsedDocument.content.length > 20 && <p>…and more</p>}
+                  </div>
+                  <div className="action-row">
+                    <Button onClick={() => void saveDocument()} disabled={!documentName.trim()}>
+                      Save locally
+                    </Button>
+                    <Button variant="ghost" onClick={() => setParsedDocument(null)}>
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
-            </>
-          )}
-          {currentView === "newjob" && (
-            <Card>
-              <CardContent className="!p-6 bg-accent-foreground">
-                <Combobox
-                  data={(documents ?? []).map((document) => ({
-                    label: document.name,
-                    value: String(document.id),
-                  }))}
-                  type="document"
-                  onValueChange={(e) => setSelectedDocument(Number(e))}
-                >
-                  <ComboboxTrigger className="!px-6 !my-10" />
-                  <ComboboxContent>
-                    <ComboboxInput />
-                    <ComboboxEmpty />
-                    <ComboboxList>
-                      <ComboboxGroup>
-                        {(documents ?? []).map((document) => (
-                          <ComboboxItem
-                            key={document.id}
-                            value={String(document.id)}
-                          >
-                            {document.name}, {document.length} paragraphs
-                          </ComboboxItem>
-                        ))}
-                      </ComboboxGroup>
-                    </ComboboxList>
-                  </ComboboxContent>
-                </Combobox>
-                <Table className="bg-ring gap-10 indent-2">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="">Prompt</TableHead>
-                      <TableHead>Model</TableHead>
-                      <TableHead className="w-20">Mode</TableHead>
-                      <TableHead className="w-30">Temperature</TableHead>
-                      <TableHead className="w-30">Model caching</TableHead>
-                      <TableHead className="w-50">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {histories?.map((history) => {
-                      const isSelected = selectedSettings === history.id;
+            </CardContent>
+          </Card>
 
-                      return (
-                        <TableRow
-                          className={`h-20 ${
-                            selectedSettings &&
-                            !isSelected &&
-                            "bg-muted-foreground pointer-events-none"
-                          }`}
-                          key={history.id}
-                        >
-                          <TableCell className="font-medium">
-                            {history.prompt}
-                          </TableCell>
-                          <TableCell>{history.model}</TableCell>
-                          <TableCell>{history.mode}</TableCell>
-                          <TableCell>{history.temperature}</TableCell>
-                          <TableCell>
-                            {history.isCache ? <Check /> : <X />}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-5">
-                              <Button
-                                className="w-18 cursor-pointer"
-                                onClick={() =>
-                                  setSelectedSettings((p) =>
-                                    p ? null : history.id
-                                  )
-                                }
-                              >
-                                {isSelected ? "Unselect" : "Select"}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                  <TableFooter className="h-10 text-center">
-                    <TableRow>
-                      <TableCell colSpan={6}>
-                        {histories?.length
-                          ? "All data is stored locally!"
-                          : "No data to display"}
-                      </TableCell>
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-                <InteractiveHoverButton
-                  disabled={!selectedSettings || !selectedDocument}
-                  className={`!py-2 !px-6 !mt-10 ${
-                    (!selectedSettings || !selectedDocument) &&
-                    "pointer-events-none invert-25"
-                  }`}
-                  onClick={() => {
-                    if (selectedDocument && selectedSettings) {
-                      db.job.add({
-                        historyId: selectedSettings,
-                        documentId: selectedDocument,
-                        editedContent: [],
-                        progress: 0,
-                      });
-                      setCurrentView("jobhistory");
-                    }
-                  }}
-                >
-                  Create batch job
-                </InteractiveHoverButton>
+          <Card className="surface-card">
+            <CardHeader>
+              <CardTitle>Local documents</CardTitle>
+              <CardDescription>Only extracted paragraphs are stored.</CardDescription>
+            </CardHeader>
+            <CardContent className="document-list">
+              {documents?.length ? (
+                documents.map((document) => (
+                  <div key={document.id} className="document-row">
+                    <FileText aria-hidden="true" />
+                    <div>
+                      <strong>{document.name}</strong>
+                      <span>{document.length} paragraphs · {document.sourceType.toUpperCase()}</span>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Delete ${document.name}`}
+                      onClick={() => void deleteDocument(document)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state compact">No imported documents yet.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {view === "create" && (
+        <Card className="surface-card form-card">
+          <CardHeader>
+            <CardTitle>Create batch job</CardTitle>
+            <CardDescription>
+              Reuse the instruction and model settings from a successful editor run.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="form-grid">
+            <div className="field-stack">
+              <Label htmlFor="job-document">Document</Label>
+              <Select value={selectedDocumentId} onValueChange={setSelectedDocumentId}>
+                <SelectTrigger id="job-document">
+                  <SelectValue placeholder="Choose a document" />
+                </SelectTrigger>
+                <SelectContent>
+                  {documents?.map((document) => (
+                    <SelectItem key={document.id} value={String(document.id)}>
+                      {document.name} · {document.length} paragraphs
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="field-stack">
+              <Label htmlFor="job-run">Saved instruction</Label>
+              <Select value={selectedRunId} onValueChange={setSelectedRunId}>
+                <SelectTrigger id="job-run">
+                  <SelectValue placeholder="Choose a saved run" />
+                </SelectTrigger>
+                <SelectContent className="max-h-80">
+                  {runs?.map((run) => (
+                    <SelectItem key={run.id} value={String(run.id)}>
+                      {run.prompt.slice(0, 80)} · {run.model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="field-stack">
+              <Label htmlFor="job-name">Job name</Label>
+              <Input
+                id="job-name"
+                value={jobName}
+                onChange={(event) => setJobName(event.target.value)}
+                placeholder="Optional"
+              />
+            </div>
+            <Button
+              onClick={() => void createJob()}
+              disabled={!selectedDocumentId || !selectedRunId}
+            >
+              Create job
+            </Button>
+            {(!documents?.length || !runs?.length) && (
+              <p className="form-hint">
+                {!documents?.length ? "Import a document first. " : ""}
+                {!runs?.length ? "Complete an editor run first." : ""}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {view === "jobs" && (
+        <div className="job-stack">
+          {activeJobId !== null && (
+            <Card className="surface-card active-job-card">
+              <CardHeader>
+                <div>
+                  <p className="eyebrow">Running locally</p>
+                  <CardTitle>{joinedJobs.find((job) => job.id === activeJobId)?.name}</CardTitle>
+                </div>
+                <Button variant="outline" onClick={() => void pauseJob()}>
+                  <Pause /> Pause safely
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loadProgress ? (
+                  <div className="model-progress">
+                    <div>
+                      <span>{loadProgress.text}</span>
+                      <span>{Math.round(loadProgress.progress * 100)}%</span>
+                    </div>
+                    <progress value={loadProgress.progress} max={1} />
+                  </div>
+                ) : (
+                  <div className="stream-preview" aria-live="polite">
+                    <span>Paragraph {(currentParagraph ?? 0) + 1}</span>
+                    <p>{streamedParagraph || "Generating…"}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
-          {currentView === "jobhistory" && (
-            <>
-              <Card>
-                <CardContent className="!p-6 bg-accent-foreground">
-                  <Table className="bg-ring gap-10 indent-2">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-150">Prompt</TableHead>
-                        <TableHead className="w-80">Model</TableHead>
-                        <TableHead className="w-60">Document Name</TableHead>
-                        <TableHead className="w-20">Progress</TableHead>
 
-                        <TableHead className="">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {joinedJobs?.map((job) => {
-                        return (
-                          <TableRow className={`h-20 `} key={job.id}>
-                            <TableCell className="font-medium">
-                              {job.history?.prompt}
-                            </TableCell>
-                            <TableCell>{job.history?.model}</TableCell>
-                            <TableCell>{job.document?.name}</TableCell>
-                            <TableCell>
-                              {job.progress}/{job.document?.length}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-5">
-                                {job.progress < (job.document?.length ?? 0) && (
-                                  <Button
-                                    className="w-18 cursor-pointer"
-                                    onClick={() => onJobStart(job.id)}
-                                  >
-                                    {job.progress ? "Resume" : "Start"}
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="outline"
-                                  className="w-30 cursor-pointer"
-                                  onClick={() => setPreviewId(job.id)}
-                                >
-                                  View results
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  className="w-40 cursor-pointer"
-                                  onClick={() =>
-                                    navigator.clipboard.writeText(
-                                      job.editedContent.join("\n")
-                                    )
-                                  }
-                                >
-                                  Copy to clipboard
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  className="w-40 cursor-pointer"
-                                  onClick={() => db.job.delete(job.id)}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                    <TableFooter className="h-10 text-center">
-                      <TableRow>
-                        <TableCell colSpan={6}>
-                          {joinedJobs?.length
-                            ? "All data is stored locally!"
-                            : "No data to display"}
-                        </TableCell>
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
+          {joinedJobs.length ? (
+            joinedJobs.map((job) => (
+              <Card key={job.id} className="surface-card job-card">
+                <CardHeader>
+                  <div>
+                    <div className="run-meta">
+                      <Badge variant={job.status === "error" ? "destructive" : "secondary"}>
+                        {job.status}
+                      </Badge>
+                      <span>{job.progress}/{job.document?.length ?? 0} complete</span>
+                    </div>
+                    <CardTitle>{job.name}</CardTitle>
+                    <p className="model-name">
+                      {job.document?.name ?? "Missing document"} · {job.history?.model ?? "Missing run"}
+                    </p>
+                  </div>
+                  <div className="action-row compact-actions">
+                    {job.status !== "completed" && (
+                      <Button
+                        size="sm"
+                        onClick={() => void startJob(job)}
+                        disabled={activeJobId !== null || !job.history || !job.document}
+                      >
+                        {activeJobId === job.id ? <LoaderCircle className="spin" /> : <Play />}
+                        {job.progress ? "Resume" : "Start"}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void openPreview(job)}
+                    >
+                      Review
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Delete ${job.name}`}
+                      disabled={activeJobId === job.id}
+                      onClick={() => void deleteJob(job)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <progress value={job.progress} max={job.document?.length || 1} />
+                  {job.error && <p className="field-error">{job.error}</p>}
                 </CardContent>
               </Card>
-              {isJobInProgress && (
-                <div className="w-[100vw] h-[100vh] top-0 left-0 fixed flex justify-center !z-1100">
-                  <Dialog modal open={isJobInProgress}>
-                    <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
-                      <DialogHeader className="text-background items-center">
-                        <DialogTitle>Batch job is in progress</DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          {currentParagraph === null
-                            ? "Your model is currently loading, see below for details"
-                            : "The LLM is editing your document, paragraphs will appear as they are ready."}
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="text-muted-foreground overflow-auto max-h-[60vh] !px-10">
-                        {currentParagraph !== null ? (
-                          cachedEditedContent.map((paragraph) => (
-                            <p className="!mb-5">{paragraph}</p>
-                          ))
-                        ) : (
-                          <>
-                            <p>Loading: {modelLoadProgress}%</p>
-                            <br></br>
-                            <b>{modelLoadText}</b>
-                          </>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              )}
-              {previewId !== null && (
-                <div className="w-[100vw] h-[100vh] top-0 left-0 fixed flex justify-center !z-1100">
-                  <Dialog modal open={previewId !== null}>
-                    <DialogContent className="h-full w-full bg-foreground flex flex-col items-center justify-center gap-10">
-                      <DialogHeader className="text-background items-center">
-                        <DialogTitle>Batch job preview</DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          Below are the currently ready paragraphs of your batch
-                          job
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="text-muted-foreground overflow-auto max-h-[60vh] !px-10">
-                        {joinedJobs
-                          ?.find((job) => job.id === previewId)
-                          ?.editedContent.map((paragraph) => (
-                            <p className="!mb-5">{paragraph}</p>
-                          ))}
-                      </div>
-
-                      <Button
-                        variant="secondary"
-                        className="w-40 cursor-pointer"
-                        onClick={() => setPreviewId(null)}
-                      >
-                        Close
-                      </Button>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              )}
-            </>
+            ))
+          ) : (
+            <div className="empty-state">
+              <h2>No batch jobs yet</h2>
+              <p>Create one from an imported document and saved editor run.</p>
+              <Button onClick={() => setView("create")}>Create a job</Button>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {previewId !== null && previewJob && (
+        <section className="review-panel">
+          <div className="review-heading">
+            <div>
+              <p className="eyebrow">Review changes</p>
+              <h2>{previewJob.name}</h2>
+              <p>Accept an edit or reject it to keep the original paragraph.</p>
+            </div>
+            <div className="action-row compact-actions">
+              <Button variant="outline" size="sm" onClick={() => void acceptAll()}>
+                <Check /> Accept all ready
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => exportPreview("txt")}>
+                <Download /> TXT
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => exportPreview("md")}>
+                <Download /> Markdown
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void navigator.clipboard.writeText(acceptedDocumentText(previewParagraphs ?? []))
+                }
+              >
+                <Copy /> Copy
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPreviewId(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+          <div className="paragraph-review-list">
+            {previewParagraphs?.map((paragraph) => (
+              <article key={paragraph.id} className="paragraph-review">
+                <header>
+                  <span>Paragraph {paragraph.index + 1}</span>
+                  <Badge variant="outline">{paragraph.status}</Badge>
+                </header>
+                <div className="comparison-grid">
+                  <div>
+                    <span>Original</span>
+                    <p>{paragraph.originalText}</p>
+                  </div>
+                  <div>
+                    <span>Edited</span>
+                    <p>{paragraph.editedText || paragraph.error || "Not generated yet."}</p>
+                  </div>
+                </div>
+                {paragraph.editedText && (
+                  <footer>
+                    <Button
+                      size="sm"
+                      variant={paragraph.status === "accepted" ? "default" : "outline"}
+                      onClick={() => void setParagraphStatus(paragraph.id, "accepted")}
+                    >
+                      <Check /> Accept edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={paragraph.status === "rejected" ? "destructive" : "outline"}
+                      onClick={() => void setParagraphStatus(paragraph.id, "rejected")}
+                    >
+                      <X /> Keep original
+                    </Button>
+                  </footer>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

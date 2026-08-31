@@ -1,3 +1,8 @@
 export function Footer() {
-  return <>© {new Date().getFullYear()} Ivan Radev. All rights reserved.</>;
+  return (
+    <footer className="site-footer">
+      <span>© {new Date().getFullYear()} Ivan Radev</span>
+      <span>Local inference · Local browser storage</span>
+    </footer>
+  );
 }

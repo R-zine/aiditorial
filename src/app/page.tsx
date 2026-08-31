@@ -1,125 +1,81 @@
-"use client";
-
-import { Meteors } from "@/components/magicui/meteors";
-import styles from "./page.module.css";
-import { AuroraText } from "@/components/magicui/aurora-text";
-import { LineShadowText } from "@/components/magicui/line-shadow-text";
-import { MorphingText } from "@/components/magicui/morphing-text";
-import { TextAnimate } from "@/components/magicui/text-animate";
-import { RainbowButton } from "@/components/magicui/rainbow-button";
-import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
+import { ArrowRight, FileStack, History, LockKeyhole, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className={styles.page}>
-      <div className="flex">
-        <div className="absolute inset-0 w-screen h-200 bg-foreground overflow-hidden">
-          <Meteors
-            number={50}
-            minDelay={0}
-            maxDelay={2}
-            minDuration={0.5}
-            maxDuration={30}
-            angle={230}
-            className="absolute inset-0"
-          />
-
-          <div className="relative top-30 z-10 flex flex-col items-center justify-center gap-10 text-center">
-            <h1 className="text-white text-4xl font-bold mt-4xl">
-              AIditorial is your <AuroraText>LLM-powered</AuroraText>
-              <MorphingText texts={["literature", "message", "essay"]} />
-              <hr className="mt-20" />
-              <br />
-              editor that runs{" "}
-              <LineShadowText className="font-thin" shadowColor="white">
-                locally
-              </LineShadowText>{" "}
-              on your machine.
-            </h1>
-          </div>
+    <div className="home-page">
+      <section className="hero-section">
+        <div className="hero-glow" aria-hidden="true" />
+        <p className="eyebrow"><LockKeyhole /> Private by design · powered by WebLLM</p>
+        <h1>
+          A calmer way to edit with a <span>local language model.</span>
+        </h1>
+        <p className="hero-copy">
+          Refine essays, fiction, and personal writing directly in your browser.
+          Your text stays on your device, your model remains your choice, and
+          every change is yours to review.
+        </p>
+        <div className="hero-actions">
+          <Button asChild size="lg">
+            <Link href="/prompt">Open the editor <ArrowRight /></Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link href="/batch">Edit a document</Link>
+          </Button>
         </div>
-      </div>
-      <div className="z-1000 !mt-80">
-        <TextAnimate
-          delay={2}
-          duration={1}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl mt-200"
-        >
-          Why? Free options such as ChatGPT are typically front ends for a
-          rotating set of underlying models, which can lead to inconsistent
-          behavior over time.
-        </TextAnimate>
-        <TextAnimate
-          delay={3}
-          duration={1}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl"
-        >
-          Paid services are often prohibitively expensive for hobbyist, student,
-          or exploratory work.
-        </TextAnimate>
-        <TextAnimate
-          delay={4}
-          duration={1}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl"
-        >
-          Most available tools operate as black boxes, with limited transparency
-          around how data is stored or whether it may be reused for training
-          future models or services.
-        </TextAnimate>
-        <TextAnimate
-          delay={5}
-          duration={1}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl"
-        >
-          Token limits can be difficult to evaluate in advance, particularly for
-          longer projects such as novels or extended essays.
-        </TextAnimate>
-        <TextAnimate
-          delay={6}
-          duration={2}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl"
-        >
-          Finally, as commercial products, these systems are subject to legal
-          and policy constraints. As a result, they include guardrails that can
-          interfere with editing work that addresses sensitive, controversial,
-          or dark subject matter.
-        </TextAnimate>
-        <TextAnimate
-          delay={8}
-          duration={2}
-          animation="slideUp"
-          by="word"
-          once
-          className="text-gray-300 max-w-prose text-xl"
-        >
-          The solution? Run a language model locally, directly in the browser.
-          If you are skeptical, that is intentional. You can cache the model in
-          advance and disable network access for this page — or for your entire
-          system — while using it.
-        </TextAnimate>
-      </div>
-      <Link href="/prompt">
-        <RainbowButton variant="outline" className="w-36 p-6">
-          Start{" "}
-          <ChevronRightIcon className="ml-1 size-4 transition-transform duration-300 group-hover:translate-x-1" />
-        </RainbowButton>
-      </Link>
+        <div className="trust-row">
+          <span>No account</span>
+          <span>No text upload</span>
+          <span>Runs after model download</span>
+        </div>
+      </section>
+
+      <section className="feature-section" aria-labelledby="features-title">
+        <div className="section-heading">
+          <p className="eyebrow">Focused tools, fewer distractions</p>
+          <h2 id="features-title">Built around the edit</h2>
+        </div>
+        <div className="feature-grid">
+          <article>
+            <Sparkles />
+            <h3>Write and compare</h3>
+            <p>
+              Stream an edit, inspect the original beside the result, and keep
+              complete run history locally.
+            </p>
+          </article>
+          <article>
+            <FileStack />
+            <h3>Process long work</h3>
+            <p>
+              Apply a proven instruction paragraph by paragraph, pause safely,
+              and review every change before export.
+            </p>
+          </article>
+          <article>
+            <History />
+            <h3>Return to decisions</h3>
+            <p>
+              Restore prompts, source text, output, model settings, and
+              conversations from this browser.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="privacy-section">
+        <div>
+          <p className="eyebrow">What “local” means here</p>
+          <h2>The model downloads. Your writing does not upload.</h2>
+        </div>
+        <p>
+          WebLLM fetches model files when you first select a model, then performs
+          inference through WebGPU. AIditorial stores runs and extracted document
+          text in IndexedDB without an application server. Browser storage is not
+          encrypted, so use a trusted browser profile and device.
+        </p>
+      </section>
     </div>
   );
 }
