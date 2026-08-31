@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, FileStack, History, LockKeyhole, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  FileStack,
+  History,
+  LockKeyhole,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
@@ -7,7 +13,9 @@ export default function HomePage() {
     <div className="home-page">
       <section className="hero-section">
         <div className="hero-glow" aria-hidden="true" />
-        <p className="eyebrow"><LockKeyhole /> Private by design · powered by WebLLM</p>
+        <p className="eyebrow">
+          <LockKeyhole /> Private by design · powered by WebLLM
+        </p>
         <h1>
           A calmer way to edit with a <span>local language model.</span>
         </h1>
@@ -18,7 +26,9 @@ export default function HomePage() {
         </p>
         <div className="hero-actions">
           <Button asChild size="lg">
-            <Link href="/prompt">Open the editor <ArrowRight /></Link>
+            <Link href="/prompt">
+              Open the editor <ArrowRight />
+            </Link>
           </Button>
           <Button asChild size="lg" variant="outline">
             <Link href="/batch">Edit a document</Link>
@@ -70,10 +80,10 @@ export default function HomePage() {
           <h2>The model downloads. Your writing does not upload.</h2>
         </div>
         <p>
-          WebLLM fetches model files when you first select a model, then performs
-          inference through WebGPU. AIditorial stores runs and extracted document
-          text in IndexedDB without an application server. Browser storage is not
-          encrypted, so use a trusted browser profile and device.
+          WebLLM fetches model files when you first select a model, then
+          performs inference through WebGPU. AIditorial stores runs and
+          extracted document text in IndexedDB without a remote application
+          server.
         </p>
       </section>
     </div>

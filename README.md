@@ -68,11 +68,18 @@ initial model download to complete.
 yarn typecheck
 yarn lint
 yarn test
+yarn test:coverage
 yarn build
 ```
 
-`yarn check` runs type checking, linting, and unit tests together. Production
-builds do not suppress TypeScript or ESLint failures.
+`yarn check` runs type checking, linting, and the coverage-enforced test suite
+together. Tests cover document parsing, IndexedDB migrations and batch
+checkpoints, WebLLM lifecycle behavior, exports, and the public application
+shell. Production builds do not suppress TypeScript or ESLint failures.
+
+Husky is installed by the `prepare` lifecycle script. Before each commit, the
+pre-commit hook runs `yarn precommit`, which delegates to the same `yarn check`
+gate used during development and CI.
 
 ## Architecture
 
