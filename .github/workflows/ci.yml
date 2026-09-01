@@ -12,13 +12,24 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: yarn
-          cache-dependency-path: yarn.lock
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn check
-      - run: yarn build
+
+      - name: Enable Yarn through Corepack
+        run: |
+          corepack enable
+          yarn --version
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run checks
+        run: yarn check
+
+      - name: Build
+        run: yarn build

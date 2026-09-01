@@ -1,57 +1,39 @@
 # AIditorial
 
-AIditorial is a local-first writing editor built with Next.js and WebLLM. It
-runs language-model inference through WebGPU in the browser and stores editor
-runs, extracted document text, and batch progress in IndexedDB.
+AIditorial is a writing editor that runs a language model in your browser. It
+is meant for essays, fiction, and other drafts that you would rather not send
+to an application server.
 
-The application has no text-processing backend. WebLLM downloads model assets
-when a model is selected; prompts and document content are then processed on
-the device.
+[Try AIditorial](https://aiditorial.netlify.app/)
 
-## What is implemented
+## What it does
 
-- Streamed local chat, focused editing, and original/edited comparison views.
-- WebLLM model selection, download progress, browser caching, retry,
-  cancellation, and engine cleanup.
-- Prompt templates using `<<PARAGRAPH>>`, `<<CONTEXT>>`, or `{{text}}`.
-- Complete local run history containing the instruction, source, output,
-  conversation, model, settings, and timestamp.
-- Client-side plain-text extraction from DOCX and ODT files up to 25 MB.
-- Resumable paragraph-by-paragraph batch jobs with progress checkpoints.
-- Per-paragraph accept/reject review and TXT, Markdown, or clipboard export.
-- A versioned Dexie schema that upgrades existing version-one browser data.
-- Type checking, linting, focused unit tests, and GitHub Actions CI.
+- Chat with a local model or give it a focused editing instruction.
+- Compare the source and edited text before keeping the result.
+- Save prompts, output, model settings, and conversations in local history.
+- Import DOCX and ODT files and work through them paragraph by paragraph.
+- Pause batch jobs, review each change, and export the result as text or
+  Markdown.
 
-## Deliberate limitations
+There is no account system and no text-processing backend. WebLLM downloads the
+selected model, then runs inference through WebGPU on the device. Saved runs,
+imported text, and batch progress live in the browser's IndexedDB.
 
-- DOCX and ODT imports are converted to paragraphs. Formatting, tables, images,
-  tracked changes, comments, and other document structure are not preserved.
-- Exports are plain text or Markdown, not round-tripped DOCX/ODT files.
-- The comparison view compares one local model's output with the source. It does
-  not keep multiple models in GPU memory or score models automatically.
-- Model availability, download size, speed, and memory use are determined by
-  WebLLM and the user's hardware.
-- IndexedDB is local to a browser profile but is not encrypted. Anyone with
-  access to that profile may be able to inspect stored writing.
-- Model caching supports reuse after a download. The project is not a PWA and
-  does not promise that the application shell can be opened from a cold browser
-  start without a network connection.
+## Before you try it
 
-## Browser requirements
+Use a current WebGPU-capable browser. Chrome and Edge are the most predictable
+options at the moment. The first model load can be large and may take a while;
+start with a small instruct model if you are unsure how much memory your device
+can spare.
 
-- A current WebGPU-enabled browser. Recent Chrome and Edge releases are the
-  most predictable choices.
-- Enough GPU memory and browser storage for the selected model. Start with a
-  small instruct model when testing an unfamiliar device.
-- JavaScript and IndexedDB enabled.
+“Local” does not mean completely offline. WebLLM still needs a network
+connection to fetch uncached model files, and the hosted app itself must be
+loaded from Netlify. Browser storage is also not encrypted, so use a browser
+profile and device you trust.
 
-The editor reports an actionable compatibility error when WebGPU is not
-available.
+## Running locally
 
-## Development
-
-Requirements: Node.js 22 or newer and Corepack (included with supported Node.js
-releases). The repository pins its Yarn version in `package.json`.
+You will need Node.js 22 or newer and Corepack.
 
 ```bash
 corepack enable
@@ -59,59 +41,38 @@ yarn install --immutable
 yarn dev
 ```
 
-Open `http://localhost:3000`, choose a model in the Editor, and wait for the
-initial model download to complete.
+Then open [http://localhost:3000](http://localhost:3000), go to the editor, and
+choose a model.
 
-### Quality commands
+The repository uses Yarn 4 and strict peer-dependency checks. It is not
+configured to fall back to `legacy-peer-deps`.
+
+## Checks
 
 ```bash
-yarn typecheck
-yarn lint
-yarn test
-yarn test:coverage
+yarn check
 yarn build
 ```
 
-`yarn check` runs type checking, linting, and the coverage-enforced test suite
-together. Tests cover document parsing, IndexedDB migrations and batch
-checkpoints, WebLLM lifecycle behavior, exports, and the public application
-shell. Production builds do not suppress TypeScript or ESLint failures.
+`yarn check` runs TypeScript, ESLint, and the coverage-enabled Vitest suite.
+The Husky pre-commit hook runs the same check.
 
-Husky is installed by the `prepare` lifecycle script. Before each commit, the
-pre-commit hook runs `yarn precommit`, which delegates to the same `yarn check`
-gate used during development and CI.
+For a single test run or watch mode:
 
-## Architecture
-
-```text
-src/
-├── app/
-│   ├── prompt/       Controlled editor and streamed local generation
-│   ├── history/      Complete saved-run review and export
-│   └── batch/        Import, job execution, review, and export
-├── db/db.ts          Dexie schema and version-one migration
-├── hooks/
-│   ├── useWebLLM/    Editor model lifecycle, streaming, retry, and cancellation
-│   └── useBatchRunner/ Batch lifecycle, checkpointing, pause, and cleanup
-└── lib/
-    ├── documents.ts  DOCX/ODT parsing and browser downloads
-    └── editor.ts     Prompt composition and export utilities
+```bash
+yarn test
+yarn test:watch
 ```
 
-Batch results are stored as individual paragraph records. This avoids rewriting
-an ever-growing result array at every checkpoint and lets review decisions be
-updated independently.
+## Document imports
 
-## Privacy model
+DOCX and ODT imports are intentionally converted to plain paragraphs. Tables,
+images, tracked changes, comments, and document styling are not preserved, and
+exports are TXT or Markdown rather than reconstructed office documents.
 
-AIditorial does not contain application code that uploads prompts or extracted
-documents. WebLLM must contact its configured model hosts to obtain uncached
-model assets. As with any hosted web application, users must trust the
-JavaScript delivered by the host; for the strongest assurance, inspect and run
-the project locally.
+## Stack
 
-Deleting browser site data removes AIditorial's saved runs, documents, jobs, and
-potentially cached model assets. Export important work before clearing storage.
+Next.js, React, TypeScript, Tailwind CSS, WebLLM, Dexie, Radix UI, and Vitest.
 
 ## License
 
